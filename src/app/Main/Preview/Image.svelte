@@ -8,6 +8,10 @@
     let image = $state(null);
     let canvas = $state(null);
 
+    /* The paper is shown at two thirds of its size in dots */
+
+    const SCALE = 0.66;
+
 
     /* The renderer speaks the same languages as the encoder */
 
@@ -89,7 +93,7 @@
         <div class="error">{error}</div>
     {:else if image}
         <div class="paper">
-            <canvas bind:this={canvas} style="width: {image.width}px;"></canvas>
+            <canvas bind:this={canvas} style="width: {Math.round(image.width * SCALE)}px;"></canvas>
         </div>
     {/if}
 {/if}
@@ -98,11 +102,9 @@
 
     .paper {
         background: #fff;
-        border-radius: 8px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
         box-sizing: border-box;
-        padding: 16px;
-        margin: 16px auto;
+        padding: 32px;
+        margin: 24px auto;
         width: max-content;
         max-width: 100%;
     }
