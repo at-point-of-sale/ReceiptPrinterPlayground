@@ -21,6 +21,20 @@ const getEncoder = async (options) => {
         encoderOptions.printerModel = options.printerModel;
     }
 
+    /* Values reported by the connected printer win over the model */
+
+    if (options.language) {
+        encoderOptions.language = options.language;
+    }
+
+    if (options.codepageMapping) {
+        encoderOptions.codepageMapping = options.codepageMapping;
+    }
+
+    if (options.columns) {
+        encoderOptions.columns = options.columns;
+    }
+
     /* Create encoder */
 
     let encoder;
