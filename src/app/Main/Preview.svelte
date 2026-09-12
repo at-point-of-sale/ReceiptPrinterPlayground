@@ -5,6 +5,7 @@
 
     import Commands from './Preview/Commands.svelte';
     import Encoded from './Preview/Encoded.svelte';
+    import Image from './Preview/Image.svelte';
     import Output from './Preview/Output.svelte';
     import Text from './Preview/Text.svelte';
 
@@ -17,6 +18,7 @@
     let commands;
     let encoded;
     let output;
+    let image;
 
     let render = async () => {
         let encoder;
@@ -45,6 +47,10 @@
             case 'output':
                 output.render(encoder);
                 break;
+
+            case 'image':
+                image.render(encoder);
+                break;
         }
     }
 
@@ -68,6 +74,7 @@
         <Commands bind:this={commands} {view} />
         <Encoded bind:this={encoded} {view} />
         <Output bind:this={output} {view} />
+        <Image bind:this={image} {view} />
     </main>
 </div>
 

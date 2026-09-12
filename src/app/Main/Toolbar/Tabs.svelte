@@ -5,6 +5,7 @@
     import commandsIcon from '../../../assets/icons/tabs/commands.svg?raw';
     import encodedIcon from '../../../assets/icons/tabs/encoded.svg?raw';
     import outputIcon from '../../../assets/icons/tabs/output.svg?raw';
+    import imageIcon from '../../../assets/icons/tabs/image.svg?raw';
 
     let { view } = $props();
 
@@ -34,6 +35,12 @@
             <input type="radio" name="format" value="output" bind:group={$view}>
             <Icon data={outputIcon} />
             Output
+        </label>
+
+        <label>
+            <input type="radio" name="format" value="image" bind:group={$view}>
+            <Icon data={imageIcon} />
+            Image
         </label>
     </nav>
 </div>
