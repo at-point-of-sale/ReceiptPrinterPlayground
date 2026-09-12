@@ -16,12 +16,12 @@
     "vite": "^5.4.10"
   },
   "dependencies": {
-    "@point-of-sale/receipt-printer-encoder": "^3.0.3",
-    "@point-of-sale/webusb-receipt-printer": "^2.0.0",
+    "@point-of-sale/receipt-printer-encoder": "^4.0.0",
+    "@point-of-sale/webusb-receipt-printer": "^2.1.0",
     "@point-of-sale/webserial-receipt-printer": "^2.0.0",
-    "@point-of-sale/webbluetooth-receipt-printer": "^2.0.0",
+    "@point-of-sale/webbluetooth-receipt-printer": "^2.1.0",
     "bcbp": "^6.0.2",
     "verhoeff": "^0.0.5",
-    "@point-of-sale/receipt-printer-renderer": "^0.1.0"
+    "@point-of-sale/receipt-printer-renderer": "^0.3.0"
   }
 }
