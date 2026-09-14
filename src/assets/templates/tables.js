@@ -78,3 +78,82 @@ encoder
     .width(2)
     .line("-".repeat(encoder.columns / 2))
     .width(1);
+
+encoder
+    .newline()
+    .line('Borders and rule rows')
+    .newline()
+
+/* A bordered table with a rule row under the header, a rule row above
+   the total and a total that spans the first two columns */
+
+encoder.table(
+    [
+        { align: 'left' },
+        { width: 4, align: 'right' },
+        { width: 8, align: 'right' }
+    ],
+    [
+        ['Item', 'Qty', 'Price'],
+        { rule: true },
+        ['Beer', '2', '13.00'],
+        ['Chidori', '2', '172.80'],
+        { rule: true },
+        [{ span: 2, content: 'Total', align: 'right' }, '185.80']
+    ],
+    { border: 'single' }
+)
+
+encoder.newline()
+
+/* A grid: a border and a rule between every pair of rows, with rounded
+   corners on printers that have them (Epson compatible and Star) */
+
+encoder.table(
+    [
+        { width: 3, align: 'right' },
+        { align: 'left' },
+        { width: 8, align: 'right' }
+    ],
+    [
+        ['1x', 'Spaghetti Bolognese', '€ 10,00'],
+        ['10x', 'Spaghetti alla carbonara', '€ 100,00'],
+        [{ span: 2, content: 'Total', align: 'right' }, '€ 110,00']
+    ],
+    { border: 'single', corners: 'rounded', rules: 'all' }
+)
+
+encoder.newline()
+
+/* A double border, with margins inside the border */
+
+encoder.table(
+    [
+        { align: 'left', marginLeft: 1 },
+        { width: 6, align: 'right', marginRight: 1 }
+    ],
+    [
+        [(encoder) => encoder.bold(true).text('Table 12').bold(false), '19:00'],
+        { rule: true },
+        ['Party of', '4']
+    ],
+    { border: 'double' }
+)
+
+encoder.newline()
+
+/* A narrow table, centred on the paper, with a double height cell */
+
+encoder
+    .align('center')
+    .table(
+        [
+            { width: 10, align: 'left' },
+            { width: 8, align: 'right' }
+        ],
+        [
+            ['Total', (encoder) => encoder.size(1, 2).text('185.80')],
+        ],
+        { border: 'single', corners: 'rounded', width: 21 }
+    )
+    .align('left')
