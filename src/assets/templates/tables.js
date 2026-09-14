@@ -183,3 +183,22 @@ encoder.table(
 )
 
 encoder.newline()
+
+/* A grid without an outline: rules between the cells only, and the
+   content spans the paper. A cell can override the margins of its
+   column with marginLeft and marginRight */
+
+encoder.table(
+    [
+        { align: 'left' },
+        { width: 8, align: 'right' }
+    ],
+    [
+        ['Beer', '13.00'],
+        ['Chidori', '172.80'],
+        [{ content: 'Total', marginLeft: 2 }, '185.80']
+    ],
+    { border: 'single', rules: 'all', outline: 'none' }
+)
+
+encoder.newline()
