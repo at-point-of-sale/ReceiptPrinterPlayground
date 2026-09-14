@@ -176,7 +176,8 @@ encoder.table(
         ['Chidori', '172.80'],
         { rule: true },
         [{ content: 'Total', align: 'right', border: 'none' }, '185.80'],
-        [{ content: 'Paid in cash', align: 'right', border: 'none' }, { content: '200.00', border: { bottom: 'none' } }]
+        { rule: true },
+        [{ content: 'Paid in cash', align: 'right', border: 'none' }, '200.00']
     ],
     { border: 'single', corners: 'rounded' }
 )
