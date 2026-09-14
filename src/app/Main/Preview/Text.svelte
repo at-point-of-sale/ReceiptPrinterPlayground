@@ -20,14 +20,25 @@
             let qrcode = {};
             let pdf417 = {};
 
+            /* Without line spacing a line is fed by the height of its characters and
+               nothing more, so that the vertical lines of boxes and tables touch. The
+               command applies to the feed of the line it is on, wherever it is on that
+               line, and stays in effect until it is changed back */
+
+            let tight = false;
+
             result += `<div class="receipt" style="--columns: ${columns};">`;
 
             for (let line of data) {
-                result += '<div class="text">';
+                let content = '';
 
                 for (let command of line.commands) {
                     if (command.type === 'text') {
-                        result += command.value.split('').map(c => `<span class='character ${font} ${size} ${[...classes.keys()].join(' ')}'>${c}</span>`).join('');
+                        content += command.value.split('').map(c => `<span class='character ${font} ${size} ${[...classes.keys()].join(' ')}'>${c}</span>`).join('');
+                    }
+
+                    if (command.type === 'line-spacing') {
+                        tight = command.value === 'none';
                     }
 
                     if (command.type === 'align') {
@@ -65,7 +76,7 @@
                                 scale: qrcode.size,
                             }
 
-                            result += `<div class='placeholder ${command.type} ${align}'><img src='https://bwipjs-api.metafloor.com/?${Object.entries(properties).map(i => i[0]+'='+escape(i[1])).join('&')}' onerror="this.style.display='none'"></div>`;
+                            content += `<div class='placeholder ${command.type} ${align}'><img src='https://bwipjs-api.metafloor.com/?${Object.entries(properties).map(i => i[0]+'='+escape(i[1])).join('&')}' onerror="this.style.display='none'"></div>`;
 
                             qrcode = {};
                         }
@@ -87,7 +98,7 @@
                                 scaleY: pdf417.height * pdf417.width,
                             }
 
-                            result += `<div class='placeholder ${command.type} ${align}'><img src='https://bwipjs-api.metafloor.com/?${Object.entries(properties).map(i => i[0]+'='+escape(i[1])).join('&')}' onerror="this.style.display='none'"></div>`;
+                            content += `<div class='placeholder ${command.type} ${align}'><img src='https://bwipjs-api.metafloor.com/?${Object.entries(properties).map(i => i[0]+'='+escape(i[1])).join('&')}' onerror="this.style.display='none'"></div>`;
 
                             pdf417 = {};
                         }
@@ -138,7 +149,7 @@
                                 properties.textsize = 8;
                             }
 
-                            result += `<div class='placeholder ${command.type} ${align}'><img src='https://bwipjs-api.metafloor.com/?${Object.entries(properties).map(i => i[0]+'='+escape(i[1])).join('&')}' onerror="this.style.display='none'"></div>`;
+                            content += `<div class='placeholder ${command.type} ${align}'><img src='https://bwipjs-api.metafloor.com/?${Object.entries(properties).map(i => i[0]+'='+escape(i[1])).join('&')}' onerror="this.style.display='none'"></div>`;
 
                             barcode = {};
                         }
@@ -177,15 +188,15 @@
                             }
                         }
 
-                        result += `<div class='placeholder ${command.type} ${align}'><img src='${canvas.toDataURL()}'  style='width: ${command.width / 4 * 3}px; height: ${command.height / 4 * 3}px;'></div>`;
+                        content += `<div class='placeholder ${command.type} ${align}'><img src='${canvas.toDataURL()}'  style='width: ${command.width / 4 * 3}px; height: ${command.height / 4 * 3}px;'></div>`;
                     }
 
                     if (command.type === 'cut') {
-                        result += `<div class='cut'></div>`;
+                        content += `<div class='cut'></div>`;
                     }
                 }
                 
-                result += '</div>';
+                result += `<div class="text${tight ? ' tight' : ''}">${content}</div>`;
             }
         }
 
@@ -260,6 +271,10 @@
         text-wrap: nowrap;
         min-height: var(--height);
         margin-bottom: calc(var(--height-a) / 4);
+    }
+
+    :global(.text.tight) {
+        margin-bottom: 0;
     }
 
     :global(.fontb) {
