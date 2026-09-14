@@ -7,19 +7,21 @@ encoder
     .newline()
 
 /*
-    ReceiptLine.transform() prints a receiptline document onto the
-    encoder. The document positions everything itself, so the encoder
-    is set to left alignment while it runs, and the final cut is left
-    to you. Rounded corners need a code page with the glyphs, which
-    codepage('auto') finds by itself on Epson compatible and Star
-    printers.
+    receiptline() prints a receiptline document. The layout comes from
+    the @point-of-sale/receiptline package, which the playground gives
+    to the encoder with the receiptline option. The command is
+    asynchronous, because the images in a document have to be decoded,
+    so it is awaited. The document positions everything itself, and the
+    final cut is left to you. Rounded corners need a code page with the
+    glyphs, which codepage('auto') finds by itself on Epson compatible
+    and Star printers.
 
     The documents below are the receipt and the guest check of the
     receiptline examples, Apache License 2.0, copyright 2019 Open
     Foodservice System Consortium and 2026 OpenReceipt Project.
 */
 
-await ReceiptLine.transform(encoder, `{image:iVBORw0KGgoAAAANSUhEUgAAAIAAAAAwAgMAAACkmpotAAAADFBMVEVlLWdzAGcAAAD///98qlo+AAAAAXRSTlMAQObYZgAAAEhJREFUOMtjYBgFowAFcK0CgQVcK4BsrQUwHoSiloIVCEprASpFLQUothKtAIsvcCoAA3TLCStYgRbe+BRgD0mqKhgFo4B4AACanYyrOJrmgQAAAABJRU5ErkJggg==}
+await encoder.receiptline(`{image:iVBORw0KGgoAAAANSUhEUgAAAIAAAAAwAgMAAACkmpotAAAADFBMVEVlLWdzAGcAAAD///98qlo+AAAAAXRSTlMAQObYZgAAAEhJREFUOMtjYBgFowAFcK0CgQVcK4BsrQUwHoSiloIVCEprASpFLQUothKtAIsvcCoAA3TLCStYgRbe+BRgD0mqKhgFo4B4AACanYyrOJrmgQAAAABJRU5ErkJggg==}
           Ichigaya Terminal
        1-Y-X Kudan, Chiyoda-ku
 -------------------------------------
@@ -40,7 +42,7 @@ encoder
     .newline()
     .newline()
 
-await ReceiptLine.transform(encoder, `|                      \`~~New Order~~|
+await encoder.receiptline(`|                      \`~~New Order~~|
 {image:iVBORw0KGgoAAAANSUhEUgAAAIAAAAAwAgMAAACkmpotAAAADFBMVEVlLWdzAGcAAAD///98qlo+AAAAAXRSTlMAQObYZgAAAEhJREFUOMtjYBgFowAFcK0CgQVcK4BsrQUwHoSiloIVCEprASpFLQUothKtAIsvcCoAA3TLCStYgRbe+BRgD0mqKhgFo4B4AACanYyrOJrmgQAAAABJRU5ErkJggg==}
 |Table |    A05|Order #    |  0003-01|
 |Time  |  19:00|Party Size |        2|

@@ -16,7 +16,9 @@ const getEncoder = async (options) => {
 
     /* Set options */
 
-    let encoderOptions = {};
+    let encoderOptions = {
+        receiptline: ReceiptLine
+    };
                 
     if (options.printerModel) {
         encoderOptions.printerModel = options.printerModel;
@@ -53,10 +55,6 @@ const getEncoder = async (options) => {
 
     try {
         encoder = new ReceiptPrinterEncoder(encoderOptions);
-
-        /* Available to the template scripts, next to encoder and model */
-
-        void ReceiptLine;
 
         eval(`
             (async function() {
