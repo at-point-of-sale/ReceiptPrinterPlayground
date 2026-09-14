@@ -84,8 +84,10 @@ encoder
     .line('Borders and rule rows')
     .newline()
 
-/* A bordered table with a rule row under the header, a rule row above
-   the total and a total that spans the first two columns */
+/* A framed table with dividers, a rule row under the header, a rule
+   row above the total and a total that spans the first two columns.
+   The outline is the frame, the border is the lines between the cells,
+   each with its own style */
 
 encoder.table(
     [
@@ -101,13 +103,13 @@ encoder.table(
         { rule: true },
         [{ span: 2, content: 'Total', align: 'right' }, '185.80']
     ],
-    { border: 'single' }
+    { outline: 'single', border: 'single' }
 )
 
 encoder.newline()
 
-/* A grid: a border and a rule between every pair of rows, with rounded
-   corners on printers that have them (Epson compatible and Star) */
+/* A grid: a frame, dividers and a rule between every pair of rows, with
+   rounded corners on printers that have them (Epson compatible and Star) */
 
 encoder.table(
     [
@@ -120,12 +122,12 @@ encoder.table(
         ['10x', 'Spaghetti alla carbonara', '€ 100,00'],
         [{ span: 2, content: 'Total', align: 'right' }, '€ 110,00']
     ],
-    { border: 'single', corners: 'rounded', rules: 'all' }
+    { outline: 'single', border: 'single', corners: 'rounded', rules: 'all' }
 )
 
 encoder.newline()
 
-/* A double border, with margins inside the border */
+/* A double frame with single dividers, and margins inside the frame */
 
 encoder.table(
     [
@@ -137,7 +139,7 @@ encoder.table(
         { rule: true },
         ['Party of', '4']
     ],
-    { border: 'double' }
+    { outline: 'double', border: 'single' }
 )
 
 encoder.newline()
@@ -154,7 +156,7 @@ encoder
         [
             ['Total', (encoder) => encoder.size(1, 2).text('185.80')],
         ],
-        { border: 'single', corners: 'rounded', width: 21 }
+        { outline: 'single', border: 'single', corners: 'rounded', width: 21 }
     )
     .align('left')
 
@@ -179,7 +181,7 @@ encoder.table(
         { rule: true },
         [{ content: 'Paid in cash', align: 'right', border: 'none' }, '200.00']
     ],
-    { border: 'single', corners: 'rounded' }
+    { outline: 'single', border: 'single', corners: 'rounded' }
 )
 
 encoder.newline()
@@ -198,7 +200,23 @@ encoder.table(
         ['Chidori', '172.80'],
         [{ content: 'Total', marginLeft: 2 }, '185.80']
     ],
-    { border: 'single', rules: 'all', outline: 'none' }
+    { border: 'single', rules: 'all' }
+)
+
+encoder.newline()
+
+/* A frame without dividers: the cells are only separated by their margins */
+
+encoder.table(
+    [
+        { align: 'left', marginLeft: 1 },
+        { width: 8, align: 'right', marginRight: 1 }
+    ],
+    [
+        ['Beer', '13.00'],
+        ['Chidori', '172.80']
+    ],
+    { outline: 'double' }
 )
 
 encoder.newline()

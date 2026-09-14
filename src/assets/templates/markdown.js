@@ -80,7 +80,7 @@ encoder
 encoder
     .newline()
     .box(
-        { width: encoder.columns - 4, border: 'single', corners: 'rounded', marginLeft: 2, paddingLeft: 1, paddingRight: 1 },
+        { width: encoder.columns - 4, outline: 'single', corners: 'rounded', marginLeft: 2, paddingLeft: 1, paddingRight: 1 },
         (encoder) => encoder.markdown(`### Thank you
 See you **again** soon!`)
     )
@@ -98,6 +98,6 @@ encoder
                 (encoder) => encoder.markdown('==Closed==\non Sunday')
             ]
         ],
-        { border: 'single', corners: 'rounded' }
+        { outline: 'single', border: 'single', corners: 'rounded' }
     )
     .newline()
