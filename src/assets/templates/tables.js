@@ -157,3 +157,28 @@ encoder
         { border: 'single', corners: 'rounded', width: 21 }
     )
     .align('left')
+
+encoder.newline()
+
+/* A cell can turn its border off, entirely or per side. An edge is
+   drawn when either of the cells next to it wants it, so the rules
+   of the neighbours stay and the junctions follow */
+
+encoder.table(
+    [
+        { align: 'left' },
+        { width: 10, align: 'right' }
+    ],
+    [
+        ['Item', 'Price'],
+        { rule: true },
+        ['Beer', '13.00'],
+        ['Chidori', '172.80'],
+        { rule: true },
+        [{ content: 'Total', align: 'right', border: 'none' }, '185.80'],
+        [{ content: 'Paid in cash', align: 'right', border: 'none' }, { content: '200.00', border: { bottom: 'none' } }]
+    ],
+    { border: 'single', corners: 'rounded' }
+)
+
+encoder.newline()
