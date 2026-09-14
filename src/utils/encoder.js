@@ -1,4 +1,5 @@
 import ReceiptPrinterEncoder from "@point-of-sale/receipt-printer-encoder";
+import * as ReceiptLine from "@point-of-sale/receiptline";
 
 const getEncoder = async (options) => {
     
@@ -52,6 +53,10 @@ const getEncoder = async (options) => {
 
     try {
         encoder = new ReceiptPrinterEncoder(encoderOptions);
+
+        /* Available to the template scripts, next to encoder and model */
+
+        void ReceiptLine;
 
         eval(`
             (async function() {

@@ -60,6 +60,8 @@
     import barcodesTemplate from '../../assets/templates/barcodes.js?raw';
     import qrcodeTemplate from '../../assets/templates/qrcode.js?raw';
     import pdf417Template from '../../assets/templates/pdf417.js?raw';
+    import markdownTemplate from '../../assets/templates/markdown.js?raw';
+    import receiptlineTemplate from '../../assets/templates/receiptline.js?raw';
 
     export function load(template) {
         switch (template) {
@@ -69,6 +71,8 @@
             case 'barcodes':    editor.setValue(barcodesTemplate); break;
             case 'qrcode':      editor.setValue(qrcodeTemplate); break;
             case 'pdf417':      editor.setValue(pdf417Template); break;
+            case 'markdown':    editor.setValue(markdownTemplate); break;
+            case 'receiptline': editor.setValue(receiptlineTemplate); break;
             default:            editor.setValue(newTemplate); break;
         }
 

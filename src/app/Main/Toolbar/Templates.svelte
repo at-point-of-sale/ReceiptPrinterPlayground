@@ -4,6 +4,8 @@
     import newIcon from '../../../assets/icons/templates/new.svg?raw';
     import textIcon from '../../../assets/icons/templates/text.svg?raw';
     import tablesIcon from '../../../assets/icons/templates/tables.svg?raw';
+    import markdownIcon from '../../../assets/icons/templates/markdown.svg?raw';
+    import receiptlineIcon from '../../../assets/icons/templates/receiptline.svg?raw';
     import imagesIcon from '../../../assets/icons/templates/images.svg?raw';
     import barcodesIcon from '../../../assets/icons/templates/barcodes.svg?raw';
     import qrcodeIcon from '../../../assets/icons/templates/qrcode.svg?raw';
@@ -27,6 +29,16 @@
     <button onclick={() => onload('tables')}>
         <Icon data={tablesIcon} />
         Tables
+    </button>
+
+    <button onclick={() => onload('markdown')}>
+        <Icon data={markdownIcon} />
+        Markdown
+    </button>
+
+    <button onclick={() => onload('receiptline')}>
+        <Icon data={receiptlineIcon} />
+        ReceiptLine
     </button>
 
     <button onclick={() => onload('images')}>
