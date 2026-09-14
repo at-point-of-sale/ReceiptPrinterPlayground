@@ -82,50 +82,6 @@ encoder
     .newline()
 
 encoder
-    .line('Markdown')
-    .newline()
-
-/* A small subset of Markdown: every source line is a line on paper,
-   headings become sizes and bold, and the current alignment applies */
-
-encoder
-    .align('center')
-    .markdown(`# Ichigaya Terminal
-1-Y-X Kudan, Chiyoda-ku
-02-09-2019 19:00`)
-    .align('left')
-    .markdown(`
----
-
-Some **bold**, some *italic*, some __underlined__ and some ==inverted== text,
-and a link to [our site](https://example.com) that prints as its text.
-Literal \\*asterisks\\* and ORDER_123 stay as they are.
-
-## Order
-
-| Item    | Qty | Price |
-|:--------|----:|------:|
-| Beer    |   2 | 13.00 |
-| Chidori |   2 | 172.80 |
-
-- Meals and goods at the __reduced__ tax rate
-- ==Paid== in cash
-1. Keep this receipt
-2. Visit our site
-`)
-
-/* Markdown works inside boxes and table cells as well */
-
-encoder
-    .box(
-        { width: encoder.columns - 4, border: 'single', corners: 'rounded', marginLeft: 2, paddingLeft: 1, paddingRight: 1 },
-        (encoder) => encoder.markdown(`## Notes
-Thank you for your visit,
-see you **again** soon!`)
-    )
-    .newline()
-
-encoder
     .rule({ style: 'single' })
     .line('ξεσκεπάζω την ψυχοφθόρα βδελυγμία. ξεσκεπάζω την ψυχοφθόρα βδελυγμία. ξεσκεπάζω την ψυχοφθόρα βδελυγμία.')
 
