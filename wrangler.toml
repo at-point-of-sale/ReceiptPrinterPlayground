@@ -1,0 +1,17 @@
+name = "receipt-printer-playground"
+compatibility_date = "2026-09-01"
+
+# The app lives under https://point-of-sale.dev at /receipt-printer/playground/
+# through the website Worker (github.com/at-point-of-sale/PointOfSale), which
+# reaches this Worker over a service binding, so it needs no hostname of
+# its own.
+workers_dev = false
+preview_urls = false
+
+# There is no script: the built app is static files, and Cloudflare serves
+# those at the edge itself. `npm run deploy` builds first. The build is not
+# a command in this file because the website's `npm run dev` runs this
+# Worker next to its own, and wrangler would run a build command here from
+# the website's directory.
+[assets]
+directory = "./dist"
