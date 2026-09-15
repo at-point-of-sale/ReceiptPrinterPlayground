@@ -150,14 +150,20 @@ encoder.rule();
 
 encoder
     .newline()
-    .line('{ text: true }')
-    .barcode('123456789012', 'ean13', { text: true })
+    .line('{ text: above }')
+    .barcode('123456789012', 'ean13', { text: 'above' })
     .newline()
 
 encoder
     .newline()
-    .line('{ text: true }')
-    .barcode('1234567890128', 'ean13', { text: true })
+    .line('{ text: below }')
+    .barcode('1234567890128', 'ean13', { text: 'below' })
+    .newline()
+
+encoder
+    .newline()
+    .line('{ text: both }')
+    .barcode('1234567890128', 'ean13', { text: 'both' })
     .newline()
 
 encoder.rule();
