@@ -144,9 +144,19 @@
                                 scale: barcode.width,
                             }
 
-                            if (barcode.text) {
+                            /* Where the human readable text goes: none, above, below or both,
+                               with the booleans of older encoders as below and none. bwip-js
+                               draws the text on one side only, so both is previewed as below */
+
+                            let position = barcode.text === true ? 'below' : barcode.text || 'none';
+
+                            if (position !== 'none') {
                                 properties.includetext = 'true';
                                 properties.textsize = 8;
+
+                                if (position === 'above') {
+                                    properties.textyalign = 'above';
+                                }
                             }
 
                             content += `<div class='placeholder ${command.type} ${align}'><img src='https://bwipjs-api.metafloor.com/?${Object.entries(properties).map(i => i[0]+'='+escape(i[1])).join('&')}' onerror="this.style.display='none'"></div>`;
