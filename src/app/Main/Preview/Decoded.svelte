@@ -20,6 +20,12 @@
     /* A payload is never shown as a wall of numbers, so a list stays a list */
 
     const LIMIT = 16;
+    const PAYLOAD = 8;
+
+    /* A parameter of one or two bytes is a number to read; anything longer is
+       the data behind the numbers */
+
+    const NUMBER = 2;
 
     /* The line feed, which is where a line of the list ends, and the carriage
        return the encoder writes behind it */
@@ -36,25 +42,88 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
-    const hex = (bytes) => Array.from(bytes).slice(0, LIMIT).map(i => i.toString(16).padStart(2, 0)).join(' ')
-        + (bytes.length > LIMIT ? ' …' : '');
+    const hex = (bytes, limit) => Array.from(bytes).slice(0, limit).map(i => '0x' + i.toString(16).padStart(2, 0)).join(' ')
+        + (bytes.length > limit ? ' …' : '');
 
     const spaces = (value) => escape(value).replace(/ /g, '<span class="space">&nbsp;</span>');
 
     const meanings = (parameters) => parameters.map(p => p.meaning || `${p.name}: ${p.value}`).join(', ');
 
 
+    /* The parameters of a command, in the order the command carries them: the
+       bytes each one was read from and what it means, and the data behind them
+       last, which is what the numbers are about */
+
+    const parameters = (token) => {
+        let result = '';
+        let payload = '';
+        let list = token.parameters || [];
+
+        for (let i = 0; i < list.length; i++) {
+            let parameter = list[i];
+
+            /* A parameter the command did not carry keeps its place in the list of
+               the decoder, and has nothing to show here */
+
+            if (parameter.length === 0 || typeof parameter.value === 'undefined') {
+                continue;
+            }
+
+            /* The string a command prints, the data it stores */
+
+            if (typeof parameter.value === 'string') {
+                payload += '<span class="payload"><span class="separator">|</span>'
+                    + `<span class="text">${spaces(parameter.value)}</span></span>`;
+                continue;
+            }
+
+            if (parameter.length > NUMBER) {
+                payload += '<span class="payload"><span class="separator">|</span>'
+                    + escape(parameter.meaning || `${parameter.value} bytes`)
+                    + `<span class="raw">${hex(parameter.bytes, PAYLOAD)}</span></span>`;
+                continue;
+            }
+
+            /* Two parameters that share a byte, the nibbles of GS !, are the one
+               byte they were read from with both meanings behind it */
+
+            let shared = [parameter];
+
+            while (i + 1 < list.length
+                && list[i + 1].offset === parameter.offset
+                && list[i + 1].length === parameter.length) {
+                shared.push(list[++i]);
+            }
+
+            /* Parameters that share a byte are told apart by the part of their
+               names behind the comma, "n, width" and "n, height", which is
+               shown in front of each meaning; a parameter of its own needs no
+               such word */
+
+            const label = (p) => shared.length > 1 && p.name.includes(',')
+                ? `${p.name.slice(p.name.indexOf(',') + 1).trim()} ` : '';
+
+            result += `<span class="parameter"><span class="raw">${hex(parameter.bytes, NUMBER)}</span>`
+                + `${escape(shared.map(p => label(p) + (p.meaning ?? p.value)).join(', '))}</span>`;
+        }
+
+        return result + payload;
+    }
+
+
     /* One token, as the other panes show one command */
 
     const command = (token) => {
         if (token.type === 'command') {
-            /* A command nothing is known about has its mnemonic as its summary,
-               which the type says already */
+            /* The family names the command and the parameters say the rest of it,
+               so a command nothing is known about is its mnemonic and its bytes */
+
+            let described = parameters(token);
 
             return `<div class="command" data-type="${token.known === false ? 'unknown' : 'command'}">`
-                + `<span class="type">${escape(token.mnemonic)}</span>`
-                + (token.summary === token.mnemonic ? '' : `<span class="description">${escape(token.summary)}</span>`)
-                + `<span class="raw">${hex(token.bytes)}</span>`
+                + `<span class="type">${escape(token.family.mnemonic)}</span>`
+                + (token.family.name === token.family.mnemonic ? '' : `<span class="description">${escape(token.family.name)}</span>`)
+                + (described || (token.known === false ? `<span class="raw">${hex(token.bytes, LIMIT)}</span>` : ''))
                 + '</div>';
         }
 
@@ -80,7 +149,7 @@
 
         return '<div class="command" data-type="incomplete">'
             + '<span class="type">Incomplete</span>'
-            + `<span class="raw">${hex(token.bytes)}</span>`
+            + `<span class="raw">${hex(token.bytes, LIMIT)}</span>`
             + '</div>';
     }
 
@@ -167,8 +236,28 @@
         max-width: calc(100% - 36px);
     }
 
+    /* A parameter is the bytes it was read from and what they mean, the bytes
+       small and muted so that the meaning is what is read */
+
+    div :global(.line .command .parameter),
+    div :global(.line .command .payload) {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
     div :global(.line .command .raw) {
-        color: #666;
+        background: #c9c9c9;
+        border-radius: 4px;
+        color: #555;
+        font-size: 0.65rem;
+        padding: 2px 5px;
+        text-wrap: nowrap;
+    }
+
+    div :global(.line .command .separator) {
+        color: #aaa;
+        padding: 0;
     }
 
     .error {
