@@ -17,21 +17,27 @@
         'star-line': 'star',
     };
 
-    /* A payload is never shown as a wall of numbers, so a list stays a list */
+    /* A payload is never shown as a wall of numbers, so a row stays a row */
 
     const LIMIT = 16;
-    const PAYLOAD = 8;
 
-    /* A parameter of one or two bytes is a number to read; anything longer is
-       the data behind the numbers */
-
-    const NUMBER = 2;
-
-    /* The line feed, which is where a line of the list ends, and the carriage
-       return the encoder writes behind it */
+    /* The line feed, which the encoder writes a carriage return behind */
 
     const LF = 0x0a;
     const CR = 0x0d;
+
+    /* How a byte is written where a mnemonic goes, which is the spelling the
+       command references use. The decoder spells its own mnemonics with this
+       table and does not export it */
+
+    const ABBREVIATIONS = [
+        'NUL', 'SOH', 'STX', 'ETX', 'EOT', 'ENQ', 'ACK', 'BEL',
+        'BS', 'HT', 'LF', 'VT', 'FF', 'CR', 'SO', 'SI',
+        'DLE', 'DC1', 'DC2', 'DC3', 'DC4', 'NAK', 'SYN', 'ETB',
+        'CAN', 'EM', 'SUB', 'ESC', 'FS', 'GS', 'RS', 'US', 'SP',
+    ];
+
+    const DELETE = 0x7f;
 
 
     /* Everything below comes out of the stream, so everything below is escaped */
@@ -42,114 +48,150 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
 
-    const hex = (bytes, limit) => Array.from(bytes).slice(0, limit).map(i => '0x' + i.toString(16).padStart(2, 0)).join(' ')
-        + (bytes.length > limit ? ' …' : '');
+    const spaces = (value) => escape(value).replace(/ /g, '<span class="space">·</span>');
 
-    const spaces = (value) => escape(value).replace(/ /g, '<span class="space">&nbsp;</span>');
+    const spell = (byte) => {
+        if (byte < ABBREVIATIONS.length) {
+            return ABBREVIATIONS[byte];
+        }
 
-    const meanings = (parameters) => parameters.map(p => p.meaning || `${p.name}: ${p.value}`).join(', ');
+        if (byte === DELETE) {
+            return 'DEL';
+        }
+
+        if (byte < DELETE) {
+            return String.fromCharCode(byte);
+        }
+
+        return `0x${byte.toString(16).padStart(2, 0)}`;
+    }
+
+    const byte = (value) => value.toString(16).padStart(2, 0).toUpperCase();
+
+    const hex = (bytes) => Array.from(bytes).slice(0, LIMIT).map(byte).join(' ')
+        + (bytes.length > LIMIT ? ' …' : '');
+
+    /* A name behind a name is a part of the same sentence */
+
+    const sentence = (names) => names
+        .map((name, index) => index === 0 ? name : name.charAt(0).toLowerCase() + name.slice(1))
+        .join(', ');
 
 
-    /* The parameters of a command, in the order the command carries them: the
-       bytes each one was read from and what it means, and the data behind them
-       last, which is what the numbers are about */
+    /* One row of a block: what it is called, the bytes it was read from and
+       what they mean */
 
-    const parameters = (token) => {
-        let result = '';
-        let payload = '';
+    const row = (mnemonic, bytes, meaning, header) => {
+        let name = header ? ' header' : '';
+
+        return `<span class="mnemonic${name}">${mnemonic}</span>`
+            + `<span class="bytes${name}">${bytes}</span>`
+            + `<span class="meaning${name}">${meaning}</span>`;
+    }
+
+    const block = (type, content) => `<div class="token" data-type="${type}">${content}</div>`;
+
+
+    /* A command is its family and one row per parameter, every row against the
+       bytes it was read from */
+
+    const command = (token) => {
         let list = token.parameters || [];
 
-        for (let i = 0; i < list.length; i++) {
-            let parameter = list[i];
+        /* The head of the command is whatever is in front of its first
+           parameter, which is the prefix and the command byte */
 
-            /* A parameter the command did not carry keeps its place in the list of
-               the decoder, and has nothing to show here */
+        let head = list.length ? token.bytes.subarray(0, list[0].offset) : token.bytes;
+
+        let result = row(
+            escape(token.family.mnemonic),
+            hex(head),
+            token.family.name === token.family.mnemonic ? '' : escape(token.family.name),
+            true,
+        );
+
+        for (let parameter of list) {
+            /* A parameter the command did not carry keeps its place in the list
+               of the decoder, and has nothing to show here */
 
             if (parameter.length === 0 || typeof parameter.value === 'undefined') {
                 continue;
             }
 
-            /* The string a command prints, the data it stores */
-
-            if (typeof parameter.value === 'string') {
-                payload += '<span class="payload"><span class="separator">|</span>'
-                    + `<span class="text">${spaces(parameter.value)}</span></span>`;
-                continue;
-            }
-
-            if (parameter.length > NUMBER) {
-                payload += '<span class="payload"><span class="separator">|</span>'
-                    + escape(parameter.meaning || `${parameter.value} bytes`)
-                    + `<span class="raw">${hex(parameter.bytes, PAYLOAD)}</span></span>`;
-                continue;
-            }
-
-            /* Two parameters that share a byte, the nibbles of GS !, are the one
-               byte they were read from with both meanings behind it */
-
-            let shared = [parameter];
-
-            while (i + 1 < list.length
-                && list[i + 1].offset === parameter.offset
-                && list[i + 1].length === parameter.length) {
-                shared.push(list[++i]);
-            }
-
-            /* Parameters that share a byte are told apart by the part of their
-               names behind the comma, "n, width" and "n, height", which is
-               shown in front of each meaning; a parameter of its own needs no
-               such word */
-
-            const label = (p) => shared.length > 1 && p.name.includes(',')
-                ? `${p.name.slice(p.name.indexOf(',') + 1).trim()} ` : '';
-
-            result += `<span class="parameter"><span class="raw">${hex(parameter.bytes, NUMBER)}</span>`
-                + `${escape(shared.map(p => label(p) + (p.meaning ?? p.value)).join(', '))}</span>`;
+            result += row(
+                escape(parameter.name),
+                hex(parameter.bytes),
+                parameter.meaning ? escape(parameter.meaning) :
+                    typeof parameter.value === 'string' ? spaces(parameter.value) : escape(parameter.value),
+                false,
+            );
         }
 
-        return result + payload;
+        return block(token.known === false ? 'unknown' : 'command', result);
     }
 
 
-    /* One token, as the other panes show one command */
+    /* A run of text is its characters over the bytes they were printed with. A
+       multibyte run is pairs of a CJK character set that this package does not
+       decode, so it is the bytes alone */
 
-    const command = (token) => {
-        if (token.type === 'command') {
-            /* The family names the command and the parameters say the rest of it,
-               so a command nothing is known about is its mnemonic and its bytes */
+    const text = (token) => {
+        let characters = token.multibyte ? null : Array.from(token.text);
+        let result = '';
 
-            let described = parameters(token);
+        for (let i = 0; i < token.bytes.length; i++) {
+            let character = characters ? characters[i] : '';
 
-            return `<div class="command" data-type="${token.known === false ? 'unknown' : 'command'}">`
-                + `<span class="type">${escape(token.family.mnemonic)}</span>`
-                + (token.family.name === token.family.mnemonic ? '' : `<span class="description">${escape(token.family.name)}</span>`)
-                + (described || (token.known === false ? `<span class="raw">${hex(token.bytes, LIMIT)}</span>` : ''))
-                + '</div>';
+            result += '<span class="cell">'
+                + `<span class="character${character === ' ' ? ' space' : ''}">${character === ' ' ? '·' : character ? escape(character) : '&nbsp;'}</span>`
+                + `<span class="byte">${byte(token.bytes[i])}</span>`
+                + '</span>';
         }
 
-        if (token.type === 'text') {
-            /* A multibyte run is pairs of a CJK character set that this package does
-               not decode, so it is shown by the number of bytes it covers */
+    }
 
-            return '<div class="command" data-type="text">'
-                + '<span class="type">text</span>'
-                + `<span class="text">${token.multibyte ? `${token.length} bytes` : spaces(token.text)}</span>`
-                + '</div>';
+
+    /* A control byte is one row, and so are the two of a line ending. A row of
+       dots of Star raster mode is the one that carries a count */
+
+    const control = (tokens) => {
+        let first = tokens[0];
+
+        let bytes = tokens.length > 1 ?
+            tokens.reduce((result, token) => result.concat(Array.from(token.bytes)), []) :
+            first.bytes;
+
+        let names = tokens.map((token) => token.parameters?.length ?
+            sentence([token.name, ...token.parameters.map((parameter) => parameter.meaning || `${parameter.value}`)]) :
+            token.name);
+
+        return block(first.type, row(
+            tokens.map((token) => spell(token.byte)).join(' '),
+            hex(bytes),
+            escape(sentence(names)),
+            false,
+        ));
+    }
+
+
+    /* One token, as a block of its own */
+
+    const token = (item) => {
+        if (item.type === 'command') {
+            return command(item);
         }
 
-        if (token.type === 'control' || token.type === 'ignored') {
-            return `<div class="command" data-type="${token.type}">`
-                + `<span class="type">${escape(token.name)}</span>`
-                + (token.parameters?.length ? `<span class="description">${escape(meanings(token.parameters))}</span>` : '')
-                + '</div>';
+        if (item.type === 'text') {
+            return text(item);
+        }
+
+        if (item.type === 'control' || item.type === 'ignored') {
+            return control([item]);
         }
 
         /* The tail of a stream that ends inside a command, which is the last token */
 
-        return '<div class="command" data-type="incomplete">'
-            + '<span class="type">Incomplete</span>'
-            + `<span class="raw">${hex(token.bytes, LIMIT)}</span>`
-            + '</div>';
+        return block('incomplete', row('', hex(item.bytes), 'Incomplete command', false));
     }
 
 
@@ -175,37 +217,23 @@
             });
 
             let result = '';
-            let line = '';
 
             for (let i = 0; i < tokens.length; i++) {
                 let item = tokens[i];
 
+                /* The encoder ends a line with a line feed and a carriage return,
+                   which is one ending and one block */
+
                 if (item.type === 'control' && item.byte === LF) {
-                    /* The encoder ends a line with a line feed and a carriage return,
-                       so a carriage return directly behind the line feed is part of
-                       the same ending and belongs to the glyph. One anywhere else
-                       means something on its own and stays a command of its own */
-
                     let next = tokens[i + 1];
-                    let carriage = next && next.type === 'control' && next.byte === CR;
 
-                    if (carriage) {
-                        i++;
+                    if (next && next.type === 'control' && next.byte === CR) {
+                        result += control([item, tokens[++i]]);
+                        continue;
                     }
-
-                    result += `<div class="line">${line}<div class="return" title="${carriage ? 'LF CR' : 'LF'}">⏎</div></div>`;
-                    line = '';
-                    continue;
                 }
 
-                line += command(item);
-            }
-
-            /* Whatever follows the last line feed is a line without a line feed,
-               and a carriage return that was absorbed leaves nothing behind */
-
-            if (line) {
-                result += `<div class="line">${line}</div>`;
+                result += token(item);
             }
 
             html = result;
@@ -229,35 +257,105 @@
 
     div {
         padding-top: 16px;
+        padding-bottom: 16px;
     }
 
-    div :global(.line .command) {
-        max-width: calc(100% - 36px);
+
+    /* Every token is a block of its own, and the colour of the border is what
+       kind of token it is, the colours the other panes give those kinds */
+
+    div :global(.token) {
+        background: #e9e9e9;
+        border-left: 4px solid #888;
+        border-radius: 0 5px 5px 0;
+        color: #000;
+        font-size: 0.7rem;
+        line-height: 150%;
+        margin-bottom: 4px;
+        padding: 7px 10px;
     }
 
-    /* A parameter is the bytes it was read from and what they mean, the bytes
-       small and muted so that the meaning is what is read */
+    div :global(.token[data-type="command"]) {
+        border-color: #3F51B5;
+    }
+    div :global(.token[data-type="text"]) {
+        border-color: #4CAF50;
+    }
+    div :global(.token[data-type="control"]) {
+        border-color: #00BCD4;
+    }
+    div :global(.token[data-type="ignored"]) {
+        border-color: #9e9e9e;
+    }
+    div :global(.token[data-type="unknown"]) {
+        border-color: #D32F2F;
+    }
+    div :global(.token[data-type="incomplete"]) {
+        border-color: #a43d68;
+    }
 
-    div :global(.line .command .parameter),
-    div :global(.line .command .payload) {
+
+    /* The rows of a block are three columns of the same width in every block,
+       so that the names, the bytes and the meanings line up down the pane */
+
+    div :global(.token:not([data-type="text"])) {
+        display: grid;
+        grid-template-columns: 11ch 26ch minmax(0, 1fr);
+        column-gap: 12px;
+    }
+
+    div :global(.token .mnemonic),
+    div :global(.token .bytes) {
+        font-family: var(--font-stack-mono);
+        overflow-wrap: anywhere;
+    }
+
+    div :global(.token .bytes) {
+        color: #888;
+    }
+
+    div :global(.token .header) {
+        font-weight: 600;
+    }
+
+
+    /* A run of text is a cell per character: the character over the byte it was
+       printed with, and the run wraps a character at a time */
+
+    div :global(.token[data-type="text"]) {
         display: flex;
-        align-items: center;
-        gap: 6px;
+        justify-content: space-between;
+        gap: 12px;
     }
 
-    div :global(.line .command .raw) {
-        background: #c9c9c9;
-        border-radius: 4px;
-        color: #555;
-        font-size: 0.65rem;
-        padding: 2px 5px;
-        text-wrap: nowrap;
-    }
-
-    div :global(.line .command .separator) {
-        color: #aaa;
+    div :global(.token .characters) {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0 6px;
         padding: 0;
     }
+
+    div :global(.token .cell) {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-family: var(--font-stack-mono);
+        min-width: 2ch;
+    }
+
+    div :global(.token .byte) {
+        color: #888;
+    }
+
+    div :global(.token .space) {
+        color: #aaa;
+    }
+
+    div :global(.token .codepage) {
+        color: #aaa;
+        flex: none;
+    }
+
 
     .error {
         background: #f0f0f0;

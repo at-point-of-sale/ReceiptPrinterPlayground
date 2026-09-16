@@ -232,30 +232,4 @@
         background: #D85700;
     }
 
-
-    /* The decoded view, which names a token by what the stream says it is
-       rather than by what was asked of the encoder */
-
-    main :global(.line .command[data-type="command"] .type) {
-        background: #3F51B5;
-    }
-
-    main :global(.line .command[data-type="control"] .type) {
-        background: #00BCD4;
-    }
-
-    main :global(.line .command[data-type="ignored"] .type) {
-        background: #9e9e9e;
-    }
-
-    main :global(.line .command[data-type="unknown"] .type),
-    main :global(.line .command[data-type="incomplete"] .type) {
-        background: #D32F2F;
-    }
-
-    main :global(.line .command[data-type="unknown"]),
-    main :global(.line .command[data-type="incomplete"]) {
-        background: #f3d5d5;
-    }
-
 </style>
