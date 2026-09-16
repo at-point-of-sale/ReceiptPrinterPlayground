@@ -148,6 +148,7 @@
                 + '</span>';
         }
 
+        return block('text', `<div class="characters">${result}</div>`);
     }
 
 
