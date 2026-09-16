@@ -24,4 +24,4 @@ This builds the app and deploys it. Pushes to `main` deploy automatically once t
 
 This webapp has been created by Niels Leenheer. The development of this webapp and the @point-of-sale/ printer libraries is sponsored by Salonhub.
 
-<a href="https://salohub.nl"><img src="https://salonhub.nl/assets/images/salonhub.svg" width=140></a>
+<a href="https://salonhub.nl"><img src="https://point-of-sale.dev/logo.svg" width=100></a>
