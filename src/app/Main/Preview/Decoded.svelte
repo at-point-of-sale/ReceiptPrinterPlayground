@@ -134,7 +134,6 @@
             return '<div class="command" data-type="text">'
                 + '<span class="type">text</span>'
                 + `<span class="text">${token.multibyte ? `${token.length} bytes` : spaces(token.text)}</span>`
-                + `<span class="codepage">${escape(token.codepage)}</span>`
                 + '</div>';
         }
 
