@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
-    "link": "npm link @point-of-sale/receipt-printer-encoder @point-of-sale/webusb-receipt-printer @point-of-sale/webserial-receipt-printer @point-of-sale/webbluetooth-receipt-printer @point-of-sale/receipt-printer-renderer @point-of-sale/receiptline"
+    "link": "npm link @point-of-sale/receipt-printer-encoder @point-of-sale/webusb-receipt-printer @point-of-sale/webserial-receipt-printer @point-of-sale/webbluetooth-receipt-printer @point-of-sale/receipt-printer-renderer @point-of-sale/receipt-printer-decoder @point-of-sale/receiptline"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
@@ -25,6 +25,7 @@
     "bcbp": "^6.0.2",
     "verhoeff": "^0.0.5",
     "@point-of-sale/receipt-printer-renderer": "^1.0.0",
+    "@point-of-sale/receipt-printer-decoder": "^1.0.0",
     "@point-of-sale/receiptline": "^0.1.0"
   }
 }
