@@ -23,7 +23,7 @@
 
     /*
         The inspector: the bytes that were sent to a printer, as a hex dump, as
-        the paper the printer would print and as the commands they are.
+        the commands they are and as the paper the printer would print.
 
         The three panels are columns of the grid of the page, in that order, and
         every one of them is shown or hidden from the header, with a gutter
@@ -34,8 +34,8 @@
 
     const PANELS = [
         { id: 'hex', label: 'Hex dump', icon: outputIcon },
-        { id: 'rendered', label: 'Rendered', icon: imageIcon },
         { id: 'decoded', label: 'Decoded', icon: decodedIcon },
+        { id: 'rendered', label: 'Rendered', icon: imageIcon },
     ];
 
     /* What a panel is never narrower than, and how wide a gutter is, which are
