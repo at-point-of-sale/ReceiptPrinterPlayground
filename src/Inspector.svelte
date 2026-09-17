@@ -45,7 +45,7 @@
 
     const SIZES = {
         hex:      { width: 540, maximum: 540 },
-        rendered: { width: 480, maximum: 488 },
+        rendered: { width: 448, maximum: 456 },
     };
 
     /* What a panel is never narrower than, and how wide a gutter is, which are
