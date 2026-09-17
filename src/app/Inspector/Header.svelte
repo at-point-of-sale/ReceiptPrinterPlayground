@@ -5,6 +5,7 @@
     import { Icon } from 'svelte-icon';
 
     import { isSupported } from '../../utils/printer.js';
+    import { spell, family } from '../../utils/language.js';
 
     import Popover from '../common/Popover.svelte';
 
@@ -37,7 +38,8 @@
      * @prop {Function} onconnect - Called with `{driver, baudrate}` when Connect is pressed
      * @prop {Function} ondisconnect - Called when Disconnect is pressed
      * @prop {Function} onprint - Called when the stream is to be printed
-     * @prop {string} model - Bindable id of the printer model, empty for Auto
+     * @prop {string} model - Bindable id of the printer model, empty for Auto,
+     *                        which the Print popover shows a selector for
      * @prop {?string} detected - The language the decoder found, or null
      * @prop {?string} language - The language the stream is read as, or null
      * @prop {boolean} loaded - Whether there is a stream
@@ -63,36 +65,13 @@
         shown = [],
     } = $props();
 
-    /* How a language is spelled where a person reads it */
-
-    const NAMES = {
-        'esc-pos': 'ESC/POS',
-        'star-prnt': 'StarPRNT',
-        'star-line': 'Star Line',
-        'star-graphics': 'Star Graphics',
-    };
-
-    const spell = (value) => NAMES[value] || value;
-
-    /* StarPRNT and Star Line are one command set to whatever reads a stream, so
-       the detector never answers Star Line and a Star Line model is not a model
-       of another language than the one that was found */
-
-    const family = (value) => value === 'star-line' ? 'star-prnt' : value;
-
     let models = ReceiptPrinterEncoder.printerModels;
 
     /* What the first option of the selector says: the detected language once a
-       file has been read, and nothing at all before that */
+       file has been read, and nothing at all before that. The selector itself is
+       the Rendered panel's, and this is the copy of it the popover holds */
 
     let auto = $derived(detected ? `Auto (${spell(detected)})` : 'Auto');
-
-    /* A model whose language is not the one that was detected is allowed, since
-       detection can be wrong, and this is where the page says so */
-
-    let note = $derived(detected && language && family(language) !== family(detected) ?
-        `Detected ${spell(detected)}` : '');
-
 
     /* What is kept between visits, which is what the playground keeps as well,
        under keys of this page */
@@ -244,17 +223,101 @@
         </div>
     </Popover>
 
-    <select id="model" bind:value={model}>
-        <option value="">{auto}</option>
-        <hr>
-        {#each models as printer}
-            <option value={printer.id}>{printer.name}</option>
-        {/each}
-    </select>
+    <!-- The connection outlives the stream, so the popover opens whether or not
+         there is one; the button that sends is the one that waits for it -->
 
-    {#if note}
-        <span class="note">{note}</span>
-    {/if}
+    <button
+        id="print"
+        bind:this={printButton}
+        aria-haspopup="dialog"
+        onclick={() => printMenu?.show(printButton)}
+    >
+        <Icon data={printIcon} />
+        Print
+
+        <svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+            <path fill="currentColor" d="M43 17.1L39.9 14 24 29.9 8.1 14 5 17.1 24 36z"></path>
+        </svg>
+    </button>
+
+    <Popover bind:popoverRef={printMenu} label="Print" ontoggle={opened(() => printForm, 'select, button')}>
+        <div class="form" bind:this={printForm}>
+            <!-- What the connection is made of, in a box of its own: what to
+                 connect over, which printer it is, the connection itself and
+                 what it turned out to be -->
+
+            <div class="connection">
+                <label class="row">
+                    <span>Driver</span>
+
+                    <select id="printer-driver" bind:value={driver} disabled={connected}>
+                        <option value="usb">USB</option>
+                        <option value="serial">Serial</option>
+                        <option value="bluetooth">Bluetooth</option>
+                    </select>
+                </label>
+
+                {#if driver === 'serial'}
+                    <label class="row">
+                        <span>Baud rate</span>
+
+                        <select id="printer-baudrate" bind:value={baudrate} disabled={connected}>
+                            <option value="9600">9600</option>
+                            <option value="38400">38400</option>
+                            <option value="115200">115200</option>
+                        </select>
+                    </label>
+                {/if}
+
+                <label class="row">
+                    <span>Model</span>
+
+                    <select id="printer-model" bind:value={model}>
+                        <option value="">{auto}</option>
+                        <hr>
+                        {#each models as printer}
+                            <option value={printer.id}>{printer.name}</option>
+                        {/each}
+                    </select>
+                </label>
+
+                {#if !connected}
+                    <button
+                        type="button"
+                        id="connect"
+                        disabled={!supported}
+                        onclick={() => onconnect({ driver, baudrate })}
+                    >
+                        <Icon data={connectIcon} />
+                        Connect
+                    </button>
+                {:else}
+                    <button type="button" id="disconnect" onclick={() => ondisconnect()}>
+                        <Icon data={disconnectIcon} />
+                        Disconnect
+                    </button>
+                {/if}
+
+                {#if described}
+                    <p class="status">{described}</p>
+                {/if}
+            </div>
+
+            {#if mismatch}
+                <p class="warning">{mismatch}</p>
+            {/if}
+
+            <button
+                type="button"
+                id="send"
+                disabled={!connected || !loaded}
+                onclick={() => onprint()}
+            >
+                <Icon data={printIcon} />
+                Print
+            </button>
+        </div>
+    </Popover>
 
     <button id="panels" bind:this={button} aria-haspopup="menu" onclick={() => menu?.show(button)}>
         <Icon data={panelsIcon} />
@@ -283,95 +346,6 @@
         </div>
     </Popover>
 
-    <!-- The connection outlives the stream, so the popover opens whether or not
-         there is one; the button that sends is the one that waits for it -->
-
-    <button
-        id="print"
-        bind:this={printButton}
-        aria-haspopup="dialog"
-        onclick={() => printMenu?.show(printButton)}
-    >
-        <Icon data={printIcon} />
-        Print
-
-        <svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-            <path fill="currentColor" d="M43 17.1L39.9 14 24 29.9 8.1 14 5 17.1 24 36z"></path>
-        </svg>
-    </button>
-
-    <Popover bind:popoverRef={printMenu} label="Print" ontoggle={opened(() => printForm, 'select, button')}>
-        <div class="form" bind:this={printForm}>
-            <label class="row">
-                <span>Driver</span>
-
-                <select id="printer-driver" bind:value={driver} disabled={connected}>
-                    <option value="usb">USB</option>
-                    <option value="serial">Serial</option>
-                    <option value="bluetooth">Bluetooth</option>
-                </select>
-            </label>
-
-            {#if driver === 'serial'}
-                <label class="row">
-                    <span>Baud rate</span>
-
-                    <select id="printer-baudrate" bind:value={baudrate} disabled={connected}>
-                        <option value="9600">9600</option>
-                        <option value="38400">38400</option>
-                        <option value="115200">115200</option>
-                    </select>
-                </label>
-            {/if}
-
-            <label class="row">
-                <span>Model</span>
-
-                <select id="printer-model" bind:value={model}>
-                    <option value="">{auto}</option>
-                    <hr>
-                    {#each models as printer}
-                        <option value={printer.id}>{printer.name}</option>
-                    {/each}
-                </select>
-            </label>
-
-            {#if !connected}
-                <button
-                    type="button"
-                    id="connect"
-                    disabled={!supported}
-                    onclick={() => onconnect({ driver, baudrate })}
-                >
-                    <Icon data={connectIcon} />
-                    Connect
-                </button>
-            {:else}
-                <button type="button" id="disconnect" onclick={() => ondisconnect()}>
-                    <Icon data={disconnectIcon} />
-                    Disconnect
-                </button>
-            {/if}
-
-            {#if described}
-                <p class="status">{described}</p>
-            {/if}
-
-            {#if mismatch}
-                <p class="warning">{mismatch}</p>
-            {/if}
-
-            <button
-                type="button"
-                id="send"
-                disabled={!connected || !loaded}
-                onclick={() => onprint()}
-            >
-                <Icon data={printIcon} />
-                Print
-            </button>
-        </div>
-    </Popover>
 </header>
 
 
@@ -391,20 +365,8 @@
         opacity: 0.5;
     }
 
-    /* What was detected, beside the model that is not it */
-
-    .note {
-        display: flex;
-        align-items: center;
-        height: 32px;
-        margin: 15px 15px 0 0;
-
-        font-family: system-ui;
-        font-size: 9pt;
-        color: #888;
-    }
-
-    /* The panels and the printer sit at the far end of the bar */
+    /* Load, Save and Print sit at the near end of the bar, and the panels of
+       the page at the far end of it */
 
     button#panels {
         margin-left: auto;
@@ -477,15 +439,27 @@
 
 
     /* And the printer, which is not a menu but the connection of the
-       playground's header in a column: what to connect over, what the printer
-       is, the connection itself and the button that prints over it */
+       playground's header in a column: the box of the connection, what is wrong
+       with printing this stream on it, and the button that prints anyway */
 
     .form {
         display: flex;
         flex-direction: column;
-        gap: 8px;
+        gap: 10px;
         min-width: 260px;
         padding: 12px;
+    }
+
+    /* The connection is one thing, so it stands on a ground of its own: what to
+       connect over, which printer it is, the connection and what it reported */
+
+    .connection {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 6px;
+        background: #f0f0f0;
     }
 
     .form .row {
@@ -503,12 +477,13 @@
     }
 
     /* The selects and the buttons of the header carry the margin of the header,
-       which is not the spacing of a panel */
+       which is not the spacing of a panel. Inside the box they are white, so
+       that they stand on its ground rather than melt into it */
 
     .form select {
         width: 150px;
         margin: 0;
-        background-color: #f0f0f0;
+        background-color: #fff;
     }
 
     .form button {
@@ -526,7 +501,9 @@
         background-color: #f0f0f0;
     }
 
-    /* What the driver reported, and the one thing about it worth a warning */
+    /* What the driver reported, under the connection it was made with, and the
+       one thing about it worth a warning, which stands outside the box because
+       it is about the stream as much as about the printer */
 
     .form .status,
     .form .warning {

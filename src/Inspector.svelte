@@ -10,6 +10,7 @@
     import { connect, disconnect } from './utils/printer.js';
 
     import Header from './app/Inspector/Header.svelte';
+    import Toolbar from './app/Inspector/Toolbar.svelte';
     import Split from './app/Main/Split.svelte';
 
     import HexDump from './app/panes/HexDump.svelte';
@@ -518,7 +519,11 @@
 
 {#if stream}
     {#each panels as panel, index (panel.id)}
-        <div class="panel" style="grid-column: {index * 2 + 1};">
+        <div class="panel" class:paper={panel.id === 'rendered'} style="grid-column: {index * 2 + 1};">
+            {#if panel.id === 'rendered'}
+                <Toolbar bind:model {detected} language={stream?.language || null} />
+            {/if}
+
             <main>
                 {#if panel.id === 'hex'}
                     <HexDump bind:this={hex} />
@@ -586,6 +591,23 @@
         font-family: var(--font-stack-mono);
         font-size: 0.75rem;
         color: #888;
+    }
+
+    /* The panel the paper is on is darker than the others, so that the white of
+       the paper is the receipt and not the panel, and it is a column of two: the
+       row of the model at the top, which stays where it is, and the paper, which
+       scrolls under it */
+
+    .panel.paper {
+        display: flex;
+        flex-direction: column;
+        background: #e4e4e4;
+        overflow: hidden;
+    }
+
+    .panel.paper main {
+        flex: 1;
+        overflow: auto;
     }
 
     /* The page before a file has been loaded */
