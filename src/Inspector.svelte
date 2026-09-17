@@ -124,6 +124,11 @@
     let connected = $state(false);
     let device = $state(null);
 
+    /* What is selected, which is a range of the stream: a block of the Decoded
+       panel and the bytes of the hex dump are two views of the same thing */
+
+    let selection = $state(null);
+
     let dropping = $state(false);
 
     let picker = $state(null);
@@ -245,6 +250,24 @@
         remember('inspector-panels', JSON.stringify(shown));
     });
 
+    /* The tokens of a stream are what its language says they are, so a range
+       that was selected under one language is a range of something else under
+       the next: the selection goes when the language does, and stays when the
+       model changes, which changes the paper and not the tokens */
+
+    let reader = null;
+
+    $effect(() => {
+        let current = reading;
+
+        untrack(() => {
+            if (reader !== current) {
+                reader = current;
+                choose(null);
+            }
+        });
+    });
+
     /* Every pane that is shown renders the stream, and a pane of a panel that
        has just been shown renders it the moment it exists */
 
@@ -261,8 +284,42 @@
             for (let pane of list) {
                 pane?.render(current);
             }
+
+            /* A panel that has just been shown knows nothing of what is
+               selected, so it is told after it has drawn, and brings what it
+               was told into view */
+
+            decoded?.select(selection, { scroll: true });
+            hex?.highlight(selection, { scroll: true });
         });
     });
+
+
+    /* Selecting. What the page holds is the range; the panels are told about it
+       and keep no selection of their own */
+
+    const choose = (range, origin = null) => {
+        selection = range;
+
+        /* Every pane but the one the selection came from brings it into view: a
+           pane that was clicked stays where the click left it */
+
+        decoded?.select(range, { scroll: origin !== 'decoded' });
+        hex?.highlight(range, { scroll: origin !== 'hex' });
+    }
+
+    /* And which token a byte belongs to is a question only the Decoded pane can
+       answer, since the list of tokens is its own. With that panel hidden a
+       click on the hex dump selects nothing, which is worth living with until
+       the page reads the stream itself */
+
+    const chooseByte = (offset) => {
+        if (!decoded) {
+            return;
+        }
+
+        choose(decoded.tokenAt(offset), 'hex');
+    }
 
 
     /* Loading */
@@ -280,6 +337,7 @@
 
         error = '';
         trouble = '';
+        selection = null;
         bytes = data;
         detected = detect(data);
 
@@ -598,11 +656,11 @@
 
             <main>
                 {#if panel.id === 'hex'}
-                    <HexDump bind:this={hex} />
+                    <HexDump bind:this={hex} onselect={({ offset }) => chooseByte(offset)} />
                 {:else if panel.id === 'rendered'}
                     <Image bind:this={rendered} />
                 {:else}
-                    <Decoded bind:this={decoded} />
+                    <Decoded bind:this={decoded} onselect={(range) => choose(range, 'decoded')} />
                 {/if}
             </main>
         </div>

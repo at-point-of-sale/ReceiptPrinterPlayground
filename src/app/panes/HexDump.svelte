@@ -20,8 +20,11 @@
     /**
      * @prop {object} view - The store of the tab that is shown, on a page whose
      *                       panes take turns; a pane given no view is always shown
+     * @prop {?Function} onselect - Called with the `{offset}` of the cell that was
+     *                       clicked. A pane given none is a pane nothing is
+     *                       clicked in
      */
-    let { view = null } = $props();
+    let { view = null, onselect = null } = $props();
 
     /* The bytes of a row, the height of a row in pixels, which the stylesheet
        below gives it, and the rows drawn above and below the ones in view, so
@@ -46,22 +49,44 @@
     for (let value = 0; value < 256; value++) {
         CELLS[value] = `<span class="cell">${value.toString(16).padStart(2, 0).toUpperCase()}</span>`;
 
-        CHARACTERS[value] = value > 0x20 && value < 0x7f ?
+        /* A character is a span of its own, as a cell is, so that it can be
+           counted from where it sits in the row and clicked like one */
+
+        CHARACTERS[value] = `<span class="char">${value > 0x20 && value < 0x7f ?
             (value === 0x26 ? '&amp;' : value === 0x3c ? '&lt;' : value === 0x3e ? '&gt;' :
                 String.fromCharCode(value)) :
-            DOT;
+            DOT}</span>`;
     }
 
     /* A last row that is short leaves its missing cells empty, so that the text
-       column stays where it is on every other row */
+       column stays where it is on every other row. A cell of no byte is no
+       click target, which is what the class says */
 
-    const EMPTY = '<span class="cell"></span>';
+    const EMPTY = '<span class="cell empty"></span>';
+
+    /* And the same cells and characters marked, which is what the bytes of the
+       selection wear */
+
+    const MARKED = CELLS.map((cell) => cell.replace('class="cell"', 'class="cell selected"'));
+    const MARKED_CHARACTERS = CHARACTERS.map((char) => char.replace('class="char"', 'class="char selected"'));
 
 
     let bytes = $state.raw(null);
 
     let element = $state(null);
     let container = $state(null);
+
+    /* The range of the stream that is marked, which the rows are drawn against
+       rather than painted over afterwards: the rows come and go while the pane
+       is scrolled, and a mark that is part of a row comes back with it */
+
+    let range = $state.raw(null);
+
+    /* And whether the row it starts on is to be brought into view, which is
+       asked for by the page and not by the pane: a pane never scrolls because
+       of a click of its own */
+
+    let wanted = false;
 
     /* The range of rows that is drawn, and where the block of them sits */
 
@@ -88,6 +113,7 @@
         }
 
         let result = '';
+        let marked = range;
 
         for (let row = first; row < last; row++) {
             let offset = row * LIMIT;
@@ -95,13 +121,22 @@
             let text = '';
 
             for (let index = offset; index < offset + LIMIT; index++) {
-                if (index < bytes.length) {
-                    cells += CELLS[bytes[index]];
-                    text += CHARACTERS[bytes[index]];
-                }
-                else {
+                if (index >= bytes.length) {
                     cells += EMPTY;
+                    continue;
                 }
+
+                /* A byte of the selection is marked in both columns, the hex
+                   and the text, so that a run of it reads as one thing */
+
+                if (marked && index >= marked.offset && index < marked.offset + marked.length) {
+                    cells += MARKED[bytes[index]];
+                    text += MARKED_CHARACTERS[bytes[index]];
+                    continue;
+                }
+
+                cells += CELLS[bytes[index]];
+                text += CHARACTERS[bytes[index]];
             }
 
             result += '<div class="row">'
@@ -139,6 +174,18 @@
 
         first = 0;
         last = 0;
+    }
+
+
+    /**
+     * Mark a range of the stream, and nothing when there is none
+     *
+     * @param  {?object}  selection  The `{offset, length}` to mark, or null
+     * @param  {object}   options    `scroll`, whether to bring the first row into view
+     */
+    export const highlight = (selection, { scroll = false } = {}) => {
+        range = selection || null;
+        wanted = scroll && range !== null;
     }
 
 
@@ -240,10 +287,76 @@
         untrack(measure);
     });
 
+    /* A range that has just been marked is brought into view, a third of the way
+       down the panel, unless the row it starts on is already there. Which rows
+       are drawn follows from the scroll, so the marks arrive with them */
+
+    $effect(() => {
+        let marked = range;
+
+        container;
+
+        if (!marked || !scroller || !container || !wanted) {
+            return;
+        }
+
+        wanted = false;
+
+        untrack(() => {
+            let row = Math.floor(marked.offset / LIMIT);
+
+            /* Where that row sits in what the panel scrolls, which is where the
+               rows begin plus the rows above it */
+
+            let top = container.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+                + scroller.scrollTop + row * ROW;
+
+            if (top >= scroller.scrollTop && top + ROW <= scroller.scrollTop + scroller.clientHeight) {
+                return;
+            }
+
+            scroller.scrollTop = Math.max(0, top - scroller.clientHeight / 3);
+
+            measure();
+        });
+    });
+
+
+    /* The rows are HTML rather than components, so a click on a cell is one
+       listener on the pane: which byte it is follows from the offset of the row
+       it is in and where the cell sits in that row */
+
+    const click = (event) => {
+        if (!onselect) {
+            return;
+        }
+
+        /* A byte is its cell in the hex column and its character in the text
+           column, and the filler of a short last row is neither */
+
+        let cell = event.target.closest?.('.bytes .cell:not(.empty), .text .char');
+        let row = cell?.closest('.row');
+
+        if (!cell || !row) {
+            return;
+        }
+
+        let offset = parseInt(row.querySelector('.offset')?.textContent || '', 16);
+        let index = [...cell.parentElement.children].indexOf(cell);
+
+        if (Number.isNaN(offset) || index < 0) {
+            return;
+        }
+
+        onselect({ offset: offset + index });
+    }
+
 </script>
 
 {#if !view || $view === 'hex'}
-    <div class="hex" bind:this={element}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="hex" class:selectable={!!onselect} bind:this={element} onclick={click}>
         <div class="spacer" bind:this={container} style="height: {rows * ROW}px;">
             <div class="window" style="top: {first * ROW}px;">{@html html}</div>
         </div>
@@ -301,6 +414,26 @@
 
     .hex :global(.dot) {
         color: #aaa;
+    }
+
+    /* The bytes of the selection, in the blue the page connects a printer with,
+       in the hex column and in the text column alike */
+
+    .hex :global(.selected) {
+        background: #bbdefb;
+        color: #1976d2;
+    }
+
+    .hex :global(.selected .dot) {
+        color: #1976d2;
+    }
+
+    /* A byte is picked up by a click on a page that selects, in either column;
+       the filler of a short last row is not a byte */
+
+    .selectable :global(.bytes .cell:not(.empty)),
+    .selectable :global(.text .char) {
+        cursor: pointer;
     }
 
 </style>

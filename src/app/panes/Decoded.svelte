@@ -6,8 +6,13 @@
     /**
      * @prop {object} view - The store of the tab that is shown, on a page whose
      *                       panes take turns; a pane given no view is always shown
+     * @prop {?Function} onselect - Called with the `{offset, length}` of the block
+     *                       that was clicked, and with null when the block that
+     *                       was clicked is the one that is already selected. A
+     *                       pane given none is a pane nothing is selected in,
+     *                       which is what the playground shows
      */
-    let { view = null } = $props();
+    let { view = null, onselect = null } = $props();
 
     let html = $state('');
     let error = $state('');
@@ -20,6 +25,19 @@
 
     let container = $state(null);
     let generation = 0;
+
+    /* The block that is selected, by the offset of the token it shows, and the
+       range of every block, which is how a byte of the hex dump is answered
+       with the token that covers it */
+
+    let selected = $state(null);
+    let ranges = [];
+
+    /* And whether the block that is selected is to be brought into view, which
+       is asked for by the page and not by the pane: a pane never scrolls
+       because of a click of its own */
+
+    let wanted = false;
 
     /* The images found while the HTML of a render is built */
 
@@ -156,7 +174,15 @@
         'Text and control': 'control',
     };
 
-    const block = (type, content, kind = type) => `<div class="token" data-type="${type}" data-kind="${kind}">${content}</div>`;
+    /* A block carries the range of the stream it was read from, so that a click
+       on it is a range and so that the hex dump can be marked against it */
+
+    const block = (type, content, kind, offset, length) => {
+        ranges.push({ offset, length });
+
+        return `<div class="token" data-type="${type}" data-kind="${kind}"`
+            + ` data-offset="${offset}" data-length="${length}">${content}</div>`;
+    }
 
 
     /* A command is its family and one row per parameter, every row against the
@@ -215,7 +241,8 @@
             );
         }
 
-        return block(token.known === false ? 'unknown' : 'command', result, kind);
+        return block(token.known === false ? 'unknown' : 'command', result, kind,
+            token.offset, token.length);
     }
 
 
@@ -236,7 +263,8 @@
                 + '</span>';
         }
 
-        return block('text', `<span class="mnemonic"></span><div class="characters">${result}</div>`);
+        return block('text', `<span class="mnemonic"></span><div class="characters">${result}</div>`,
+            'text', token.offset, token.length);
     }
 
 
@@ -261,12 +289,15 @@
             '<span class="return">⏎</span>' :
             escape(sentence(names));
 
+        /* A line ending is two tokens and one block, which is the range of both
+           of them: the offset of the first and the bytes of all of them */
+
         return block(first.type, row(
             tokens.map((token) => spell(token.byte)).join(' '),
             hex(bytes),
             meaning,
             false,
-        ));
+        ), first.type, first.offset, tokens.reduce((total, token) => total + token.length, 0));
     }
 
 
@@ -287,7 +318,8 @@
 
         /* The tail of a stream that ends inside a command, which is the last token */
 
-        return block('incomplete', row('', hex(item.bytes), 'Incomplete command', false));
+        return block('incomplete', row('', hex(item.bytes), 'Incomplete command', false),
+            'incomplete', item.offset, item.length);
     }
 
 
@@ -303,6 +335,8 @@
         previews = [];
         settings = null;
         pending = [];
+        ranges = [];
+        selected = null;
 
         if (!stream) {
             return;
@@ -471,13 +505,121 @@
     });
 
 
-    /* The list is HTML rather than components, so the toggle of a payload is
-       one listener on the pane */
+    /**
+     * Mark the block of a range, and nothing when there is none
+     *
+     * @param  {?object}   range     The `{offset, length}` of the block, or null
+     * @param  {object}    options   `scroll`, whether to bring the block into view
+     */
+    export const select = (range, { scroll = false } = {}) => {
+        selected = range ? range.offset : null;
+        wanted = scroll && selected !== null;
+    }
+
+    /**
+     * The range of the block that covers a byte of the stream, which is what a
+     * click on the hex dump is answered with
+     *
+     * @param  {number}    offset  The byte
+     * @return {?object}           The `{offset, length}` of the block, or null
+     */
+    export const tokenAt = (offset) => {
+        /* The blocks are in the order of the stream, so the one that covers a
+           byte is found by halving the list rather than by walking it: a stream
+           of a few hundred kilobytes is tens of thousands of blocks */
+
+        let low = 0;
+        let high = ranges.length - 1;
+
+        while (low <= high) {
+            let middle = (low + high) >> 1;
+            let range = ranges[middle];
+
+            if (offset < range.offset) {
+                high = middle - 1;
+                continue;
+            }
+
+            if (offset >= range.offset + range.length) {
+                low = middle + 1;
+                continue;
+            }
+
+            return range;
+        }
+
+        return null;
+    }
+
+    /* The block that is marked is put in the page by hand rather than by the
+       list, which is HTML and not components; this runs after every render, so
+       a pane that has just drawn its blocks marks the one that is selected */
+
+    $effect(() => {
+        let offset = selected;
+
+        html;
+
+        if (!container) {
+            return;
+        }
+
+        for (let node of container.querySelectorAll('.token.selected')) {
+            node.classList.remove('selected');
+        }
+
+        if (offset === null) {
+            return;
+        }
+
+        let node = container.querySelector(`.token[data-offset="${offset}"]`);
+
+        if (!node) {
+            return;
+        }
+
+        node.classList.add('selected');
+
+        /* And when the page asked for it, the block is brought into view. The
+           browser is the one that knows whether it is out of sight, since what
+           it is out of sight in is the panel and not the window, and `nearest`
+           moves nothing that is already inside it */
+
+        if (wanted) {
+            wanted = false;
+
+            node.scrollIntoView({ block: 'nearest' });
+        }
+    });
+
+
+    /* The list is HTML rather than components, so the toggle of a payload and
+       the click that selects a block are one listener on the pane */
 
     const click = (event) => {
         let toggle = event.target.closest?.('.toggle');
 
-        toggle?.closest('.bytes')?.classList.add('open');
+        if (toggle) {
+            toggle.closest('.bytes')?.classList.add('open');
+            return;
+        }
+
+        if (!onselect) {
+            return;
+        }
+
+        let node = event.target.closest?.('.token');
+
+        if (!node) {
+            return;
+        }
+
+        let offset = Number(node.dataset.offset);
+        let length = Number(node.dataset.length);
+
+        /* A click on the block that is selected is the click that lets it go */
+
+        onselect(offset === selected ? null : { offset, length });
     }
 
 </script>
@@ -488,7 +630,7 @@
     {:else}
         <!-- svelte-ignore a11y_click_events_have_key_events -->
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div bind:this={container} onclick={click}>{@html html}</div>
+        <div bind:this={container} class:selectable={!!onselect} onclick={click}>{@html html}</div>
     {/if}
 {/if}
 
@@ -556,6 +698,20 @@
     }
     div :global(.token[data-kind="incomplete"]) {
         --colour: #a43d68;
+    }
+
+
+    /* A block is picked up by a click on a page that selects, and the one that
+       is selected wears the blue of the page. The outline is a shadow inside the
+       block, so that it follows the rounded corners and leaves the colour of the
+       first column reaching the edge underneath it */
+
+    .selectable :global(.token) {
+        cursor: pointer;
+    }
+
+    div :global(.token.selected) {
+        box-shadow: inset 0 0 0 2px #2196F3;
     }
 
 
