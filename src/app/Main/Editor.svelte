@@ -86,6 +86,13 @@
         dirty = false;
     }
 
+    /* Ace lays itself out again when the window changes and not when the pane
+       it sits in does, so the split tells it */
+
+    export function resize() {
+        editor?.resize();
+    }
+
 
 </script>
 

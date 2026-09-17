@@ -4,6 +4,7 @@
 
     import Toolbar from './Main/Toolbar.svelte';
     import Editor from './Main/Editor.svelte';
+    import Split from './Main/Split.svelte';
     import Preview from './Main/Preview.svelte';
 
     let { contents, model } = $props();
@@ -26,4 +27,5 @@
 
 <Toolbar {view} {onload} />
 <Editor bind:this={editor} {contents} />
+<Split onresize={() => editor?.resize()} />
 <Preview {view} {contents} {model} />

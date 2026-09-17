@@ -15,62 +15,52 @@
 
 </script>
 
-<div>
-    <button onclick={() => onload('new')}>
-        <Icon data={newIcon} />
-        New...
-    </button>
+<button onclick={() => onload('new')}>
+    <Icon data={newIcon} />
+    New...
+</button>
 
-    <button onclick={() => onload('text')}>
-        <Icon data={textIcon} />
-        Text
-    </button>
+<button onclick={() => onload('text')}>
+    <Icon data={textIcon} />
+    Text
+</button>
     
-    <button onclick={() => onload('tables')}>
-        <Icon data={tablesIcon} />
-        Tables
-    </button>
+<button onclick={() => onload('tables')}>
+    <Icon data={tablesIcon} />
+    Tables
+</button>
 
-    <button onclick={() => onload('markdown')}>
-        <Icon data={markdownIcon} />
-        Markdown
-    </button>
+<button onclick={() => onload('markdown')}>
+    <Icon data={markdownIcon} />
+    Markdown
+</button>
 
-    <button onclick={() => onload('receiptline')}>
-        <Icon data={receiptlineIcon} />
-        ReceiptLine
-    </button>
+<button onclick={() => onload('receiptline')}>
+    <Icon data={receiptlineIcon} />
+    ReceiptLine
+</button>
 
-    <button onclick={() => onload('images')}>
-        <Icon data={imagesIcon} />
-        Images
-    </button>
+<button onclick={() => onload('images')}>
+    <Icon data={imagesIcon} />
+    Images
+</button>
 
-    <button onclick={() => onload('barcodes')}>
-        <Icon data={barcodesIcon} />
-        Barcodes
-    </button>
+<button onclick={() => onload('barcodes')}>
+    <Icon data={barcodesIcon} />
+    Barcodes
+</button>
 
-    <button onclick={() => onload('qrcode')}>
-        <Icon data={qrcodeIcon} />
-        QR Code
-    </button>
+<button onclick={() => onload('qrcode')}>
+    <Icon data={qrcodeIcon} />
+    QR Code
+</button>
 
-    <button onclick={() => onload('pdf417')}>
-        <Icon data={pdf417Icon} />
-        PDF417
-    </button>
-</div>
+<button onclick={() => onload('pdf417')}>
+    <Icon data={pdf417Icon} />
+    PDF417
+</button>
 
 <style>
-
-    div {
-        display: flex;
-        flex-wrap: wrap;
-        align-content: start;
-        margin-right: auto;
-        padding-left: 10px;
-    }
 
     button {
         font-weight: normal;

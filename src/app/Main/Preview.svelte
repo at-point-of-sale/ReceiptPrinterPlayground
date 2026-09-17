@@ -89,9 +89,8 @@
 
     #preview {
         grid-row: 3;
-        grid-column: 2;
+        grid-column: 3;
         background: #fafafa;
-        border-left: 1px solid #ddd;
         overflow: scroll;
     }
 
