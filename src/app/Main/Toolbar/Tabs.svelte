@@ -33,15 +33,15 @@
         </label>
 
         <label>
-            <input type="radio" name="format" value="decoded" bind:group={$view}>
-            <Icon data={decodedIcon} />
-            Decoded
-        </label>
-
-        <label>
             <input type="radio" name="format" value="output" bind:group={$view}>
             <Icon data={outputIcon} />
             Output
+        </label>
+
+        <label>
+            <input type="radio" name="format" value="decoded" bind:group={$view}>
+            <Icon data={decodedIcon} />
+            Decoded
         </label>
 
         <label>

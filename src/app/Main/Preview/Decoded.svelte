@@ -166,10 +166,17 @@
             sentence([token.name, ...token.parameters.map((parameter) => parameter.meaning || `${parameter.value}`)]) :
             token.name);
 
+        /* A line ending is the return glyph the other panes end a line with,
+           rather than its name in words */
+
+        let meaning = first.byte === LF ?
+            '<span class="return">⏎</span>' :
+            escape(sentence(names));
+
         return block(first.type, row(
             tokens.map((token) => spell(token.byte)).join(' '),
             hex(bytes),
-            escape(sentence(names)),
+            meaning,
             false,
         ));
     }
@@ -303,7 +310,7 @@
 
     div :global(.token) {
         display: grid;
-        grid-template-columns: 11ch minmax(0, 1fr) 26ch;
+        grid-template-columns: 11ch 28ch minmax(0, 1fr);
         column-gap: 12px;
     }
 
@@ -347,6 +354,10 @@
 
     div :global(.token .space) {
         color: #aaa;
+    }
+
+    div :global(.token .return) {
+        font-family: sans-serif;
     }
 
     div :global(.token .codepage) {
