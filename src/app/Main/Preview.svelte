@@ -2,11 +2,12 @@
 
     import { get } from 'svelte/store';
     import { getEncoder } from '../../utils/encoder.js';
+    import { toStream } from '../../utils/stream.js';
 
     import Commands from './Preview/Commands.svelte';
     import Encoded from './Preview/Encoded.svelte';
-    import Decoded from './Preview/Decoded.svelte';
-    import Image from './Preview/Image.svelte';
+    import Decoded from '../panes/Decoded.svelte';
+    import Image from '../panes/Image.svelte';
     import Output from './Preview/Output.svelte';
     import Text from './Preview/Text.svelte';
 
@@ -46,17 +47,27 @@
                 encoded.render(encoder);
                 break;
             
-            case 'decoded':
-                decoded.render(encoder);
-                break;
-
             case 'output':
                 output.render(encoder);
                 break;
 
-            case 'image':
-                image.render(encoder);
+            /* The two panes the inspector shows as well take a stream rather
+               than an encoder, which is built here out of the encoder's result */
+
+            case 'decoded':
+            case 'image': {
+                let stream = null;
+
+                try {
+                    stream = toStream(encoder);
+                }
+                catch (e) {
+                    errors = [...errors, e.message || String(e)];
+                }
+
+                ($view === 'decoded' ? decoded : image).render(stream);
                 break;
+            }
         }
     }
 

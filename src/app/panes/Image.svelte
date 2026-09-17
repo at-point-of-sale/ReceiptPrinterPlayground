@@ -2,7 +2,11 @@
 
     import ReceiptPrinterRenderer, { stitch, toImageData } from '@point-of-sale/receipt-printer-renderer';
 
-    let { view } = $props();
+    /**
+     * @prop {object} view - The store of the tab that is shown, on a page whose
+     *                       panes take turns; a pane given no view is always shown
+     */
+    let { view = null } = $props();
 
     let error = $state('');
     let image = $state(null);
@@ -13,51 +17,40 @@
     const SCALE = 0.66;
 
 
-    /* The renderer speaks the same languages as the encoder */
-
-    const languages = {
-        'esc-pos':   'esc-pos',
-        'star-prnt': 'star-prnt',
-        'star-line': 'star-line',
-    };
-
-    /* The codepage mapping the encoder falls back to when the printer model
-       does not name one, which is what the encoder does as well */
-
-    const mappings = {
-        'esc-pos':   'epson',
-        'star-prnt': 'star',
-        'star-line': 'star',
-    };
-
-
-    export const render = (encoder) => {
+    /**
+     * Show a stream
+     *
+     * @param  {object}  stream  The bytes and the settings of the printer that
+     *                           reads them, or null when there is no stream
+     */
+    export const render = (stream) => {
         error = '';
         image = null;
 
-        if (!encoder) {
+        if (!stream) {
             return;
         }
 
         try {
-            let language = languages[encoder.language];
+            let language = stream.language;
 
-            if (!language) {
-                throw new Error(`Cannot render ${encoder.language} commands`);
+            if (!ReceiptPrinterRenderer.languages.includes(language)) {
+                throw new Error(`Cannot render ${language} commands`);
             }
 
-            /* Render the commands the way the selected printer would print them */
+            /* Render the commands the way the printer they were sent to would
+               print them */
 
-            let width = encoder.printableWidth;
+            let width = stream.width;
 
             let renderer = new ReceiptPrinterRenderer({
                 language,
                 width,
-                codepageMapping: encoder.printerCapabilities?.codepages || mappings[language],
+                codepageMapping: stream.codepageMapping,
                 commands: [ 'cut', 'pulse', 'feed' ],
             });
 
-            let items = renderer.render(encoder.encode());
+            let items = renderer.render(stream.bytes);
 
             /* And put the paper that comes out of the printer on the canvas */
 
@@ -75,8 +68,8 @@
     }
 
 
-    /* The canvas only exists while this is the active view, so draw as soon as
-       both the image and the canvas are there */
+    /* The canvas only exists while the pane is shown, so draw as soon as both
+       the image and the canvas are there */
 
     $effect(() => {
         if (canvas && image) {
@@ -88,7 +81,7 @@
 
 </script>
 
-{#if $view === 'image'}
+{#if !view || $view === 'image'}
     {#if error}
         <div class="error">{error}</div>
     {:else if image}

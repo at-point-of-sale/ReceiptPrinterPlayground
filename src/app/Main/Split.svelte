@@ -3,43 +3,57 @@
     import { onMount } from 'svelte';
 
     /*
-        The gutter between the editor and the preview.
+        The gutter between two panes.
 
-        The two panes are the first and the third column of the grid of the page
-        and this is the second, a few pixels wide and as tall as they are. What
-        it drags is `--split`, the width of the first column, which the grid
-        clamps to a minimum of its own and which is kept in the browser, so that
-        the split a person set is the split they come back to.
+        The panes are columns of the grid of the page and this is a column
+        between two of them, a few pixels wide and as tall as they are. What it
+        drags is `--split`, or whatever the name of the gutter is, the width of
+        everything to the left of it, which the grid clamps to a minimum of its
+        own and which is kept in the browser under that same name, so that the
+        split a person set is the split they come back to.
+
+        A page with more than one gutter gives every one of them a name and the
+        column it sits in; the playground, which has one, takes the defaults.
     */
 
     /**
      * @prop {Function} onresize - Called while the split moves, for whatever has to be told
+     * @prop {string} name - The name of the variable that is dragged, and the key it is kept under
+     * @prop {number} column - The column of the grid the gutter sits in
+     * @prop {string} label - What the gutter is called, for whoever cannot see it
+     * @prop {number} minimum - What a pane beside the gutter is never narrower
+     *                          than. The default is the minimum the grid of the
+     *                          playground clamps its columns to, and a page that
+     *                          gives another has to give its grid the same one
      */
-    let { onresize = null } = $props();
+    let {
+        onresize = null,
+        name = 'split',
+        column = 2,
+        label = 'Resize the editor',
+        minimum = 240,
+    } = $props();
 
     let element = $state(null);
     let dragging = $state(false);
 
-    /* What a pane is never narrower than, which is the minimum of the grid as
-       well, and how far an arrow key moves the split */
+    /* How far an arrow key moves the split */
 
-    const MINIMUM = 240;
     const STEP = 16;
-    const KEY = 'split';
 
     let width = $state(0);
 
-    const limit = (value) => Math.max(MINIMUM,
-        Math.min(value, window.innerWidth - MINIMUM - (element?.offsetWidth || 6)));
+    const limit = (value) => Math.max(minimum,
+        Math.min(value, window.innerWidth - minimum - (element?.offsetWidth || 6)));
 
     const apply = (value, remember = true) => {
         width = limit(value);
 
-        document.body.style.setProperty('--split', `${Math.round(width)}px`);
+        document.body.style.setProperty(`--${name}`, `${Math.round(width)}px`);
 
         if (remember) {
             try {
-                localStorage.setItem(KEY, String(Math.round(width)));
+                localStorage.setItem(name, String(Math.round(width)));
             }
             catch (error) {
                 /* A browser that keeps nothing is a browser that starts halfway
@@ -54,7 +68,7 @@
         let stored = null;
 
         try {
-            stored = localStorage.getItem(KEY);
+            stored = localStorage.getItem(name);
         }
         catch (error) {
             stored = null;
@@ -156,8 +170,9 @@
     class:dragging
     role="separator"
     aria-orientation="vertical"
-    aria-label="Resize the editor"
+    aria-label={label}
     tabindex="0"
+    style="grid-column: {column};"
     onpointerdown={down}
     onpointermove={move}
     onpointerup={up}
@@ -168,9 +183,10 @@
 
 <style>
 
+    /* The column the gutter sits in is the one it was given, as an inline style */
+
     .gutter {
         grid-row: 3;
-        grid-column: 2;
 
         position: relative;
         cursor: col-resize;

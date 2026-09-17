@@ -3,7 +3,11 @@
     import { decode, LANGUAGES } from '@point-of-sale/receipt-printer-decoder';
     import ReceiptPrinterRenderer, { toImageData } from '@point-of-sale/receipt-printer-renderer';
 
-    let { view } = $props();
+    /**
+     * @prop {object} view - The store of the tab that is shown, on a page whose
+     *                       panes take turns; a pane given no view is always shown
+     */
+    let { view = null } = $props();
 
     let html = $state('');
     let error = $state('');
@@ -22,15 +26,6 @@
     let pending = [];
 
 
-    /* The codepage mapping the encoder falls back to when the printer model
-       does not name one, which is what the encoder does as well */
-
-    const mappings = {
-        'esc-pos':   'epson',
-        'star-prnt': 'star',
-        'star-line': 'star',
-    };
-
     /* A payload is never shown as a wall of numbers, so a row stays a row, and
        the bytes of a payload are cut off where a page of them ends */
 
@@ -42,15 +37,7 @@
 
     const BATCH = 4;
 
-    /* The renderer speaks the same languages as the encoder */
-
-    const languages = {
-        'esc-pos':   'esc-pos',
-        'star-prnt': 'star-prnt',
-        'star-line': 'star-line',
-    };
-
-    /* The line feed, which the encoder writes a carriage return behind */
+    /* The line feed, which a stream may write a carriage return behind */
 
     const LF = 0x0a;
     const CR = 0x0d;
@@ -304,48 +291,55 @@
     }
 
 
-    export const render = (encoder) => {
+    /**
+     * Show a stream
+     *
+     * @param  {object}  stream  The bytes and the settings of the printer that
+     *                           reads them, or null when there is no stream
+     */
+    export const render = (stream) => {
         error = '';
         html = '';
         previews = [];
         settings = null;
         pending = [];
 
-        if (!encoder) {
+        if (!stream) {
             return;
         }
 
         try {
-            let language = encoder.language;
+            let language = stream.language;
 
             if (!LANGUAGES.includes(language)) {
                 throw new Error(`Cannot decode ${language} commands`);
             }
 
-            let codepageMapping = encoder.printerCapabilities?.codepages || mappings[language];
+            let codepageMapping = stream.codepageMapping;
 
             /* What the images of the stream are drawn with, which is what the
-               Image tab draws the whole receipt with */
+               Image pane draws the whole receipt with */
 
-            if (languages[language]) {
+            if (ReceiptPrinterRenderer.languages.includes(language)) {
                 settings = {
-                    language: languages[language],
-                    width: encoder.printableWidth,
+                    language,
+                    width: stream.width,
                     codepageMapping,
                 };
             }
 
-            /* Read the bytes back the way the selected printer would read them */
+            /* Read the bytes back the way the printer they were sent to would
+               read them */
 
-            let tokens = decode(encoder.encode(), language, {codepageMapping});
+            let tokens = decode(stream.bytes, language, {codepageMapping});
 
             let result = '';
 
             for (let i = 0; i < tokens.length; i++) {
                 let item = tokens[i];
 
-                /* The encoder ends a line with a line feed and a carriage return,
-                   which is one ending and one block */
+                /* A line that ends with a line feed and a carriage return is
+                   one ending and one block */
 
                 if (item.type === 'control' && item.byte === LF) {
                     let next = tokens[i + 1];
@@ -488,7 +482,7 @@
 
 </script>
 
-{#if $view === 'decoded'}
+{#if !view || $view === 'decoded'}
     {#if error}
         <div class="error">{error}</div>
     {:else}
