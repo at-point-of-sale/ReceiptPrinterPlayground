@@ -30,6 +30,7 @@
      * @prop {number} column - The column of the grid the gutter sits in
      * @prop {number} row - The row of the grid the gutter sits in
      * @prop {string} label - What the gutter is called, for whoever cannot see it
+     * @prop {string} background - The colour of the gutter, which is the colour of the pane behind it
      * @prop {number} minimum - What a pane beside the gutter is never narrower
      *                          than. The default is the minimum the grid of the
      *                          playground clamps its columns to, and a page that
@@ -48,6 +49,7 @@
         column = 2,
         row = 3,
         label = 'Resize the editor',
+        background = '#fafafa',
         minimum = 240,
         reserve = null,
         initial = null,
@@ -222,7 +224,7 @@
     aria-orientation="vertical"
     aria-label={label}
     tabindex="0"
-    style="grid-row: {row}; grid-column: {column};"
+    style="grid-row: {row}; grid-column: {column}; background: {background};"
     onpointerdown={down}
     onpointermove={move}
     onpointerup={up}
@@ -236,10 +238,12 @@
     /* The row and the column the gutter sits in are the ones it was given, as
        an inline style */
 
+    /* The gutter is the colour of the pane behind it, so that the line of the
+       split is the border and nothing else */
+
     .gutter {
         position: relative;
         cursor: col-resize;
-        background: #fafafa;
         border-left: 1px solid #ddd;
         touch-action: none;
     }

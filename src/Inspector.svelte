@@ -587,6 +587,7 @@
                 reserve={reserve(index)}
                 {initial}
                 label="Resize the {panel.label.toLowerCase()} panel"
+                background={panels[index + 1].id === 'rendered' ? 'var(--paper)' : 'var(--pane)'}
             />
         {/if}
     {/each}
@@ -618,13 +619,19 @@
         display: grid;
         grid-template-rows: 61px auto 1fr;
         height: 100vh;
+
+        /* The grey of the panes, and the darker grey the paper lies on, which
+           the gutter in front of it wears as well */
+
+        --pane: #fafafa;
+        --paper: #e4e4e4;
     }
 
     /* A panel is a column that scrolls, in the grey the panes are shown on */
 
     .panel {
         grid-row: 3;
-        background: #fafafa;
+        background: var(--pane);
         overflow: scroll;
     }
 
@@ -640,7 +647,7 @@
        of the paper is the receipt and not the panel */
 
     .panel.paper {
-        background: #e4e4e4;
+        background: var(--paper);
     }
 
     /* The page before a file has been loaded */
