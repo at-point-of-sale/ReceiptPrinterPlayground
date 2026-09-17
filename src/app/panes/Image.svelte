@@ -5,9 +5,12 @@
     /*
         The paper, as the printer would print it.
 
-        What comes out of a printer is pieces of paper, one per cut, so that is
-        what this pane shows: the stream is split at its cuts and every piece is
-        drawn on a sheet of its own. A stream that was never cut is one piece.
+        What comes out of a printer is sheets of paper, one per full cut, so that
+        is what this pane shows. A sheet is one white block, and the paper on it
+        is one canvas per piece the stream was cut into: a partial cut does not
+        take the sheet away, so its two pieces stay on one sheet with a gap of
+        white between them and a wedge cut out of the middle of that gap. A
+        stream that was never cut is one piece on one sheet.
 
         The pane draws each piece twice over: once as the dots of the paper, on
         a canvas, and once as the boxes those dots were drawn from, which is the
@@ -34,11 +37,13 @@
     let error = $state('');
     let element = $state(null);
 
-    /* The pieces of paper: the image of each, and what was drawn where on it */
+    /* The sheets of paper: the panels of each, which are its pieces, and where
+       they are cut and gapped */
 
     let sheets = $state.raw([]);
 
-    /* What is outlined on each of them, one rectangle per piece at most */
+    /* What is outlined on each panel of each sheet, one rectangle per panel at
+       most, and the edges of the cuts that are selected */
 
     let rects = $state.raw([]);
 
@@ -51,10 +56,47 @@
 
     const CUT = 2;
 
+    /* The shape of a piece of paper, in pixels of the screen and not in dots of
+       the printer: the white around the dots, how high the tear at the right of
+       a cut rises and how far from the right edge it begins, the wedge a partial
+       cut leaves and where its point stops, and how far a stream that was never
+       cut runs on before it fades away */
+
+    const PAD = 32;
+    const SIDE = 16;
+
+    const TEAR = 6;
+    const TEAR_INSET = 14;
+
+    const NOTCH = 6;
+    const NOTCH_INSET = 12;
+
+    /* The white between two pieces of one sheet, which is where a partial cut
+       is drawn: a gap of the sheet's own paper, with the wedge in the middle of
+       it, so that no wedge ever lies over the dots */
+
+    const GAP = 12;
+
+    const RUNS_ON = 48;
+
+    /* And the teeth a strip is torn off with, on a printer that has no cutter:
+       how wide one tooth is and how deep it bites into the paper */
+
+    const TOOTH = 8;
+    const BITE = 4;
+
     /* And whether the page asked for the outline to be brought into view: a
        pane never scrolls because of a click of its own */
 
     let wanted = false;
+
+    /* How many pixels of the screen a dot of the paper is drawn at. It is two
+       thirds of a dot until it is measured, and less than that in a panel too
+       narrow for the paper, which the canvas is scaled down to fit: the wedges
+       and the teeth of a sheet are placed in pixels, so they are placed at the
+       scale the paper is actually drawn at and not at the one it asked for */
+
+    let scale = $state(0);
 
 
     /* The box of one operation, in the frame of the surface it was laid out on:
@@ -222,62 +264,123 @@
 
             /* The list first, because it says what was drawn and where; the dots
                are that same list rasterized, so the two agree by construction.
-               Split at the cuts, it is the pieces of paper that leave the
-               printer, and a stream that was never cut is one of them */
+               Split at the cuts, it is the pieces of paper the printer makes */
 
             let layout = renderer.layout(stream.bytes);
-            let split = pieces(layout);
+
+            /* A printer with no cutter ignores every command that cuts, so what
+               it prints is one strip of paper, torn off by hand at either end */
+
+            let cutter = stream.cutter !== false;
+
+            let cuts = layout.entries.filter((entry) => entry.type === 'cut');
+
+            let split = cutter ? pieces(layout) : [];
             let list = split.length ? split : [ layout ];
 
-            /* Which piece every cut ended, so that a cut that is selected can be
-               shown on the paper it took away. A cut that came before any paper
-               was printed, and the second of two cuts on one row, ended no piece
-               and is drawn nowhere */
+            /* Where every piece begins and ends on the paper, worked out the way
+               pieces() works it out: the rows the paper is cut on, inside it,
+               each once, and no piece between two cuts on one row */
 
-            let ends = [];
+            let rows = layout.height;
+            let clamp = (value) => Math.max(0, Math.min(rows, value));
 
-            if (split.length) {
-                let paper = 0;
-                let index = 0;
+            let bounds = [0, ...new Set((cutter ? cuts : []).map((entry) =>
+                clamp(entry.y)).sort((a, b) => a - b)), rows];
 
-                for (let entry of layout.entries) {
-                    if (entry.type !== 'cut') {
-                        continue;
-                    }
+            let spans = [];
 
-                    if (entry.y > paper && index < split.length) {
-                        ends[index] = entry.source;
-
-                        paper = entry.y;
-                        index++;
-                    }
+            for (let i = 0; i + 1 < bounds.length; i++) {
+                if (bounds[i + 1] > bounds[i]) {
+                    spans.push({ top: bounds[i], bottom: bounds[i + 1] });
                 }
             }
 
-            let drawn = [];
+            /* Every piece as a panel: the dots of it, and the boxes they were
+               drawn from. A piece with nothing on it, two cuts in a row, is no
+               paper and no panel */
 
-            for (let piece of list) {
+            let panels = list.map((piece) => {
                 let items = rasterize(piece, { commands: [ 'cut', 'pulse', 'feed' ] });
                 let paper = stitch(items, { width: piece.width || width });
 
-                /* A piece with nothing on it, two cuts in a row, is no paper */
-
                 if (paper.height === 0) {
-                    continue;
+                    return null;
                 }
 
                 let collected = collect(piece);
 
-                drawn.push({
+                return {
                     image: toImageData(paper),
                     boxes: collected.found,
                     bands: collected.rows,
-                    cut: ends[drawn.length] || null,
+                };
+            });
+
+            /* And the sheets those panels are on: a full cut ends the sheet and
+               takes it away, a partial cut leaves a gap in the one it is on. A
+               stream the pane could not split into the pieces it was given is
+               drawn as those pieces and nothing more, rather than wrongly */
+
+            let known = spans.length === list.length;
+
+            let drawn = [];
+            let sheet = { panels: [], gaps: [], marks: [], cut: null, torn: !cutter };
+
+            for (let i = 0; i < list.length; i++) {
+                if (panels[i]) {
+                    sheet.panels.push(panels[i]);
+                }
+
+                let here = known ? cuts.filter((entry) => clamp(entry.y) === spans[i].bottom) : [];
+                let ending = cutter ? here.find((entry) => entry.value === 'full') : null;
+
+                if (ending) {
+                    sheet.cut = ending.source;
+
+                    if (sheet.panels.length) {
+                        drawn.push(sheet);
+                    }
+
+                    sheet = { panels: [], gaps: [], marks: [], cut: null, torn: false };
+                    continue;
+                }
+
+                if (!here.length || !sheet.panels.length) {
+                    continue;
+                }
+
+                /* A partial cut between two pieces is the gap between them; one
+                   with no paper behind it is a mark on the paper in front of it */
+
+                if (i + 1 < list.length && panels[i + 1]) {
+                    sheet.gaps.push({ after: sheet.panels.length - 1, source: here[0].source });
+                    continue;
+                }
+
+                let last = sheet.panels[sheet.panels.length - 1];
+
+                sheet.marks.push({
+                    panel: sheet.panels.length - 1,
+                    row: Math.max(0, last.image.height - CUT),
+                    source: here[0].source,
                 });
             }
 
+            if (sheet.panels.length) {
+                drawn.push(sheet);
+            }
+
+            /* Without a cutter there is one strip and no edge to draw for a cut,
+               but a cut that is selected still shows the row it was made on, so
+               every cut of the stream is a mark on that one strip */
+
+            if (!cutter && drawn.length) {
+                drawn[0].marks = cuts.map((entry) => ({ panel: 0, row: clamp(entry.y), source: entry.source }));
+            }
+
             sheets = drawn;
-            rects = drawn.map(() => []);
+            rects = drawn.map((one) => one.panels.map(() => []));
         }
         catch (e) {
             error = e.message || String(e);
@@ -287,7 +390,7 @@
 
     /* The boxes of a range, which are the boxes whose bytes it holds */
 
-    const overlapping = (sheet, range) => sheet.boxes.filter((box) =>
+    const overlapping = (panel, range) => panel.boxes.filter((box) =>
         box.source.offset < range.offset + range.length &&
         range.offset < box.source.offset + box.source.length);
 
@@ -318,6 +421,21 @@
 
     const bounds = (list) => list.length ? [ extremes(list) ] : [];
 
+    /* A cut draws nothing of its own, so what is shown for it is the row it was
+       made on: the bottom of the paper in front of it for a cut that took the
+       sheet away or that gapped it, and the row itself for a cut on a strip a
+       printer without a cutter never cut at all */
+
+    const at = (panel, row) => ({
+        x: 0,
+        y: Math.max(0, Math.min(row, panel.image.height - CUT)),
+        width: panel.image.width,
+        height: Math.min(CUT, panel.image.height),
+    });
+
+    const holds = (source, range) => source &&
+        source.offset < range.offset + range.length &&
+        range.offset < source.offset + source.length;
 
     /**
      * Outline what a range of the stream drew, and nothing when there is none
@@ -325,34 +443,34 @@
      * @param  {?object}   range     The `{offset, length}` of the selection, or null
      * @param  {object}    options   `scroll`, whether to bring the outline into view
      */
-    const holds = (source, range) => source &&
-        source.offset < range.offset + range.length &&
-        range.offset < source.offset + source.length;
-
     export const select = (range, { scroll = false } = {}) => {
         rects = sheets.map((sheet) => {
+            let list = sheet.panels.map((panel) => range ? bounds(overlapping(panel, range)) : []);
+
             if (!range) {
-                return [];
+                return list;
             }
 
-            let list = bounds(overlapping(sheet, range));
+            for (let gap of sheet.gaps) {
+                if (holds(gap.source, range)) {
+                    list[gap.after].push(at(sheet.panels[gap.after], Infinity));
+                }
+            }
 
-            /* A cut draws nothing of its own, so what is shown for it is the
-               edge the paper was cut on, which is the bottom of this piece */
+            if (holds(sheet.cut, range) && list.length) {
+                list[list.length - 1].push(at(sheet.panels[list.length - 1], Infinity));
+            }
 
-            if (holds(sheet.cut, range)) {
-                list.push({
-                    x: 0,
-                    y: Math.max(0, sheet.image.height - CUT),
-                    width: sheet.image.width,
-                    height: Math.min(CUT, sheet.image.height),
-                });
+            for (let mark of sheet.marks) {
+                if (holds(mark.source, range) && list[mark.panel]) {
+                    list[mark.panel].push(at(sheet.panels[mark.panel], mark.row));
+                }
             }
 
             return list;
         });
 
-        wanted = scroll && rects.some((list) => list.length);
+        wanted = scroll && rects.some((one) => one.some((list) => list.length));
     }
 
 
@@ -361,15 +479,15 @@
        point beside the boxes of its line, in the white of the paper, is a point
        that drew nothing */
 
-    const pick = (sheet, x, y) => {
+    const pick = (panel, x, y) => {
         let index = -1;
 
         /* A later entry is printed over an earlier one, which a reverse feed
            makes possible, so the last band that holds the point is the one on
            top of the paper */
 
-        for (let i = 0; i < sheet.bands.length; i++) {
-            if (y >= sheet.bands[i].top && y < sheet.bands[i].bottom) {
+        for (let i = 0; i < panel.bands.length; i++) {
+            if (y >= panel.bands[i].top && y < panel.bands[i].bottom) {
                 index = i;
             }
         }
@@ -378,7 +496,7 @@
             return null;
         }
 
-        let band = sheet.boxes.filter((box) => box.band === index);
+        let band = panel.boxes.filter((box) => box.band === index);
 
         let hit = band.find((box) => x >= box.x && x < box.x + box.width &&
             y >= box.y && y < box.y + box.height);
@@ -417,15 +535,24 @@
         return null;
     }
 
-    /* The canvas of a piece, which is the one in its sheet */
+    /* The canvases of the panels, in the order they are on the page, which is
+       how the one of a panel is found again */
 
-    const sheetCanvas = (index) => element?.querySelectorAll('.sheet canvas')[index] || null;
+    const canvasAt = (sheet, panel) => {
+        let index = panel;
 
-    const click = (event, index) => {
-        let sheet = sheets[index];
-        let canvas = sheetCanvas(index);
+        for (let i = 0; i < sheet; i++) {
+            index += sheets[i].panels.length;
+        }
 
-        if (!onselect || !sheet || !canvas) {
+        return element?.querySelectorAll('.dots canvas')[index] || null;
+    }
+
+    const click = (event, index, which) => {
+        let panel = sheets[index]?.panels[which];
+        let canvas = event.currentTarget.querySelector('canvas');
+
+        if (!onselect || !panel || !canvas) {
             return;
         }
 
@@ -435,14 +562,141 @@
             return;
         }
 
-        let x = (event.clientX - box.left) / box.width * sheet.image.width;
-        let y = (event.clientY - box.top) / box.height * sheet.image.height;
+        let x = (event.clientX - box.left) / box.width * panel.image.width;
+        let y = (event.clientY - box.top) / box.height * panel.image.height;
 
-        let hit = pick(sheet, x, y);
+        let hit = pick(panel, x, y);
 
         onselect(hit ? { offset: hit.source.offset } : null);
     }
 
+
+    /* The shape of a piece of paper.
+
+       Its top edge is the tear it was pulled off the roll or off the piece
+       before it with: straight, and rising to a point at the right. A piece a
+       full cut took away ends in the same tear the other way up, the corner
+       gone; a piece nothing cut ends where the paper still runs, and fades out
+       rather than ending at all. And a partial cut is a wedge out of the left
+       edge, tapering to a point that stops short of the right, which is the
+       sliver of paper that holds the sheet together. It sits above the row the
+       cut was made on, so the line printed after it keeps all of its rows.
+
+       It is a clip path of the sheet, so the grey of the panel shows through
+       every edge of it, the overlay of the selection included. */
+
+    const shape = (sheet) => {
+        /* A strip that was torn off by hand, from a printer with no cutter, has
+           a row of teeth at either end and nothing else: no tear of a cut, and
+           no notch, since a cut this printer never made left no edge */
+
+        if (sheet.torn) {
+            return `polygon(${[
+                ...teeth(sheet, 1),
+                ...teeth(sheet, -1).reverse(),
+            ].join(', ')})`;
+        }
+
+        let points = [
+            `0 ${TEAR}px`,
+            `calc(100% - ${TEAR_INSET}px) ${TEAR}px`,
+            '100% 0',
+        ];
+
+        if (sheet.cut) {
+            points.push(`100% calc(100% - ${TEAR}px)`, `calc(100% - ${TEAR_INSET}px) 100%`);
+        }
+        else {
+            points.push('100% 100%');
+        }
+
+        points.push('0 100%');
+
+        /* And back up the left edge, through the wedge of every partial cut,
+           the lowest one first. A wedge sits in the middle of the gap between
+           two pieces, so it is white on either side of it and never over the
+           dots: it is deepest at the left edge and closes to a point short of
+           the right, where the sliver of paper holds the sheet together */
+
+        let list = [...gaps(sheet)].sort((a, b) => b - a);
+
+        for (let middle of list) {
+            points.push(
+                `0 ${round(middle + NOTCH / 2)}px`,
+                `calc(100% - ${NOTCH_INSET}px) ${round(middle)}px`,
+                `0 ${round(middle - NOTCH / 2)}px`,
+            );
+        }
+
+        return `polygon(${points.join(', ')})`;
+    }
+
+    /* Where the gaps of a sheet are, in pixels from its top edge: the panels
+       above a gap, at the height they are drawn at, and the gaps between them */
+
+    const gaps = (sheet) => {
+        let found = [];
+        let top = PAD + TEAR;
+
+        for (let i = 0; i < sheet.panels.length - 1; i++) {
+            top += sheet.panels[i].image.height * factor(sheet);
+
+            if (sheet.gaps.some((gap) => gap.after === i)) {
+                found.push(top + GAP / 2);
+            }
+
+            top += GAP;
+        }
+
+        return found;
+    }
+
+    /* One edge of a torn strip: a row of teeth across the paper, at the top of
+       the sheet or, upside down, at the bottom of it. They are laid out in whole
+       teeth across the width of the sheet, so that the row begins and ends on
+       the edge however wide the paper is */
+
+    const teeth = (sheet, way) => {
+        let edge = way > 0 ? `${BITE}px` : `calc(100% - ${BITE}px)`;
+        let point = way > 0 ? '0px' : '100%';
+
+        let across = span(sheet);
+        let count = Math.max(1, Math.round(across / TOOTH));
+        let step = across / count;
+
+        let list = [ `0 ${edge}` ];
+
+        for (let i = 0; i < count; i++) {
+            list.push(`${round((i + 0.5) * step)}px ${point}`);
+
+            list.push(i === count - 1 ? `100% ${edge}` : `${round((i + 1) * step)}px ${edge}`);
+        }
+
+        return list;
+    }
+
+    /* How wide a sheet is, which is the canvas it holds and the white beside it */
+
+    const span = (sheet) => sheet.panels[0].image.width * factor(sheet) + 2 * SIDE;
+
+    /* How many pixels of the screen a dot of the paper is shown at, which is the
+       width the canvas was given over the width it holds */
+
+    const factor = (sheet) => scale || Math.round(sheet.panels[0].image.width * SCALE) / sheet.panels[0].image.width;
+
+    const round = (value) => Math.round(value * 100) / 100;
+
+    /* The white a sheet carries around its dots: the room the tear needs above
+       them, and under the last sheet of a stream that was never cut the paper it
+       runs on for before it fades away */
+
+    const padding = (sheet, last) => sheet.torn ?
+        `${PAD + BITE}px ${SIDE}px ${PAD + BITE}px` :
+        `${PAD + TEAR}px ${SIDE}px ${PAD + (running(sheet, last) ? RUNS_ON : 0)}px`;
+
+    /* A strip that was torn off ends where it was torn, so it never runs on */
+
+    const running = (sheet, last) => last && !sheet.cut && !sheet.torn;
 
     /* A canvas is painted when it is put in the page, which is what an action is
        for. The list of pieces is keyed by the pieces themselves, so a canvas is
@@ -465,6 +719,41 @@
 
         draw(image);
     }
+
+
+    /* The scale the paper ends up being drawn at, which is the canvas it was
+       given over the dots it holds: a panel too narrow for the paper scales it
+       down, and the edges of the sheet follow it */
+
+    $effect(() => {
+        sheets;
+
+        if (!element) {
+            return;
+        }
+
+        const measured = () => {
+            let canvas = element.querySelector('.dots canvas');
+
+            if (!canvas || !canvas.width) {
+                return;
+            }
+
+            let next = canvas.getBoundingClientRect().width / canvas.width;
+
+            if (next && Math.abs(next - scale) > 0.0001) {
+                scale = next;
+            }
+        };
+
+        measured();
+
+        let observer = new ResizeObserver(measured);
+
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    });
 
 
     /* What scrolls the pane is the panel it was put in, which is whatever
@@ -495,8 +784,9 @@
             return;
         }
 
-        let index = list.findIndex((one) => one.length);
-        let canvas = index < 0 ? null : sheetCanvas(index);
+        let index = list.findIndex((one) => one.some((panel) => panel.length));
+        let which = index < 0 ? -1 : list[index].findIndex((panel) => panel.length);
+        let canvas = index < 0 ? null : canvasAt(index, which);
 
         if (!canvas) {
             return;
@@ -510,9 +800,9 @@
             return;
         }
 
-        let rect = list[index][0];
+        let rect = list[index][which][0];
         let box = canvas.getBoundingClientRect();
-        let factor = box.height / (sheets[index].image.height || 1);
+        let factor = box.height / (sheets[index].panels[which].image.height || 1);
 
         let top = box.top - scroller.getBoundingClientRect().top + scroller.scrollTop
             + rect.y * factor;
@@ -540,20 +830,34 @@
                  rather than elements kept from the piece that was there before -->
 
             {#each sheets as sheet, index (sheet)}
-                <div class="paper">
-                    <!-- svelte-ignore a11y_click_events_have_key_events -->
-                    <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div class="sheet" class:selectable={!!onselect} onclick={(event) => click(event, index)}>
-                        <canvas use:paint={sheet.image} style="width: {Math.round(sheet.image.width * SCALE)}px;"></canvas>
-
-                        {#if onselect}
-                            <svg viewBox="0 0 {sheet.image.width} {sheet.image.height}" aria-hidden="true">
-                                {#each rects[index] || [] as rect}
-                                    <rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} rx="2" ry="2" />
-                                {/each}
-                            </svg>
+                <div
+                    class="sheet"
+                    class:running={running(sheet, index === sheets.length - 1)}
+                    style="clip-path: {shape(sheet)}; padding: {padding(sheet, index === sheets.length - 1)};"
+                >
+                    {#each sheet.panels as panel, which}
+                        {#if which > 0}
+                            <div class="gap"></div>
                         {/if}
-                    </div>
+
+                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                        <!-- svelte-ignore a11y_no_static_element_interactions -->
+                        <div
+                            class="dots"
+                            class:selectable={!!onselect}
+                            onclick={(event) => click(event, index, which)}
+                        >
+                            <canvas use:paint={panel.image} style="width: {Math.round(panel.image.width * SCALE)}px;"></canvas>
+
+                            {#if onselect}
+                                <svg viewBox="0 0 {panel.image.width} {panel.image.height}" aria-hidden="true">
+                                    {#each rects[index]?.[which] || [] as rect}
+                                        <rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} rx="2" ry="2" />
+                                    {/each}
+                                </svg>
+                            {/if}
+                        </div>
+                    {/each}
                 </div>
             {/each}
         </div>
@@ -564,29 +868,44 @@
 
     /* A piece of paper, with the next one under it: the margins of two of them
        fall together, so the gap between two pieces is the same as the one above
-       the first and below the last */
+       the first and below the last. Its edges are the clip path of the shape it
+       was torn and cut into, which the markup gives it, and so is the white it
+       carries around its dots */
 
-    .paper {
+    .sheet {
         background: #fff;
         box-sizing: border-box;
-        padding: 32px;
         margin: 24px auto;
         width: max-content;
         max-width: 100%;
+    }
+
+    /* A stream that was never cut is paper that still runs, so the last piece of
+       it fades away rather than ending */
+
+    .sheet.running {
+        -webkit-mask-image: linear-gradient(to bottom, black calc(100% - 48px), transparent);
+        mask-image: linear-gradient(to bottom, black calc(100% - 48px), transparent);
+    }
+
+    .dots.selectable {
+        cursor: pointer;
+    }
+
+    /* The white between two pieces of one sheet, which a partial cut left */
+
+    .gap {
+        height: 12px;
     }
 
     /* The canvas and the overlay over it are one thing of the same size, which
        is what the canvas is given: the overlay follows it rather than the other
        way round */
 
-    .sheet {
+    .dots {
         position: relative;
         max-width: 100%;
         line-height: 0;
-    }
-
-    .sheet.selectable {
-        cursor: pointer;
     }
 
     canvas {

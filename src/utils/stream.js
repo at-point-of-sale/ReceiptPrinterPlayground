@@ -2,6 +2,11 @@
     The stream a pane renders: the bytes that were sent to a printer and the
     settings of the printer that reads them. A pane never sees an encoder, so
     this is where an encoder becomes one.
+
+    A stream carries `bytes`, the `language` it is read in, the `width` of the
+    paper in dots, the `codepageMapping` it was encoded with, and `cutter`,
+    whether the printer has one: a printer without a cutter ignores the commands
+    that cut, so its paper is one strip that is torn off by hand.
 */
 
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
@@ -36,7 +41,28 @@ const toStream = (encoder) => {
         language,
         width: encoder.printableWidth,
         codepageMapping: encoder.printerCapabilities?.codepages || mappings[language],
+        cutter: hasCutter(encoder),
     };
+}
+
+/**
+ * Whether the printer of an encoder has a cutter, which is a printer whose
+ * profile says so. A stream that names no printer at all is read as a printer
+ * that has one, since a receipt that is cut is what nearly every stream is
+ * written for; the encoder tells the two apart by its capabilities, which name
+ * a language only when a model was chosen
+ *
+ * @param  {object}   encoder  The encoder of the printer
+ * @return {boolean}           Whether the paper is ever cut
+ */
+const hasCutter = (encoder) => {
+    let capabilities = encoder.printerCapabilities;
+
+    if (!capabilities || !capabilities.language) {
+        return true;
+    }
+
+    return !!capabilities.cutter;
 }
 
 /**
@@ -92,8 +118,9 @@ const modelsFor = (language) => ReceiptPrinterEncoder.printerModels.filter((prin
 });
 
 /**
- * The settings a model puts behind the bytes: the width of its paper and the
- * codepage mapping it was encoded with. The language is not among them, because
+ * The settings a model puts behind the bytes: the width of its paper, the
+ * codepage mapping it was encoded with and whether it has a cutter. The
+ * language is not among them, because
  * the language of a stream is the one that was picked for it and a printer of
  * another language is read in that language all the same.
  *
@@ -108,6 +135,7 @@ const toModel = (id, language) => {
         return {
             width: generic.width,
             codepageMapping: mappings[language],
+            cutter: true,
         };
     }
 
@@ -116,6 +144,7 @@ const toModel = (id, language) => {
     return {
         width: encoder.printableWidth,
         codepageMapping: encoder.printerCapabilities?.codepages || mappings[language],
+        cutter: !!encoder.printerCapabilities?.cutter,
     };
 }
 
