@@ -8,6 +8,7 @@
 
     import { toModel, modelsFor, GENERICS, DEFAULT_MODEL } from './utils/stream.js';
     import { connect, disconnect } from './utils/printer.js';
+    import { ranges, at } from './utils/tokens.js';
 
     import Header from './app/Inspector/Header.svelte';
     import Toolbar from './app/Inspector/Toolbar.svelte';
@@ -163,6 +164,14 @@
         }
     });
 
+    /* Which bytes are one thing, which the page works out for itself: a click on
+       the hex dump or on the paper is a byte, and what is selected is the token
+       that byte belongs to, whether or not the Decoded panel is shown */
+
+    let tokens = $derived(ranges(bytes, reading));
+
+    const tokenAt = (offset) => at(tokens, offset);
+
     let panels = $derived(PANELS.filter((panel) => shown.includes(panel.id)));
 
     /* Which panel takes what the others leave: the commands, which are a list
@@ -291,6 +300,7 @@
 
             decoded?.select(selection, { scroll: true });
             hex?.highlight(selection, { scroll: true });
+            rendered?.select(selection, { scroll: true });
         });
     });
 
@@ -306,20 +316,14 @@
 
         decoded?.select(range, { scroll: origin !== 'decoded' });
         hex?.highlight(range, { scroll: origin !== 'hex' });
+        rendered?.select(range, { scroll: origin !== 'paper' });
     }
 
-    /* And which token a byte belongs to is a question only the Decoded pane can
-       answer, since the list of tokens is its own. With that panel hidden a
-       click on the hex dump selects nothing, which is worth living with until
-       the page reads the stream itself */
+    /* A byte of the hex dump and a byte the paper was drawn from are the same
+       question: which token holds it. The page answers it out of its own ranges,
+       so a panel that is hidden takes nothing with it */
 
-    const chooseByte = (offset) => {
-        if (!decoded) {
-            return;
-        }
-
-        choose(decoded.tokenAt(offset), 'hex');
-    }
+    const chooseByte = (offset, origin) => choose(tokenAt(offset), origin);
 
 
     /* Loading */
@@ -656,9 +660,12 @@
 
             <main>
                 {#if panel.id === 'hex'}
-                    <HexDump bind:this={hex} onselect={({ offset }) => chooseByte(offset)} />
+                    <HexDump bind:this={hex} onselect={({ offset }) => chooseByte(offset, 'hex')} />
                 {:else if panel.id === 'rendered'}
-                    <Image bind:this={rendered} />
+                    <Image
+                        bind:this={rendered}
+                        onselect={(hit) => hit ? chooseByte(hit.offset, 'paper') : choose(null, 'paper')}
+                    />
                 {:else}
                     <Decoded bind:this={decoded} onselect={(range) => choose(range, 'decoded')} />
                 {/if}

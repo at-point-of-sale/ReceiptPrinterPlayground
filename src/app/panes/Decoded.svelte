@@ -26,12 +26,12 @@
     let container = $state(null);
     let generation = 0;
 
-    /* The block that is selected, by the offset of the token it shows, and the
-       range of every block, which is how a byte of the hex dump is answered
-       with the token that covers it */
+    /* The block that is selected, by the offset of the token it shows. Which
+       token a byte belongs to is not asked here: the page reads the ranges of
+       the stream for itself, out of the tokenizer, so that a panel that is
+       hidden takes no answer with it */
 
     let selected = $state(null);
-    let ranges = [];
 
     /* And whether the block that is selected is to be brought into view, which
        is asked for by the page and not by the pane: a pane never scrolls
@@ -177,12 +177,9 @@
     /* A block carries the range of the stream it was read from, so that a click
        on it is a range and so that the hex dump can be marked against it */
 
-    const block = (type, content, kind, offset, length) => {
-        ranges.push({ offset, length });
-
-        return `<div class="token" data-type="${type}" data-kind="${kind}"`
+    const block = (type, content, kind, offset, length) =>
+        `<div class="token" data-type="${type}" data-kind="${kind}"`
             + ` data-offset="${offset}" data-length="${length}">${content}</div>`;
-    }
 
 
     /* A command is its family and one row per parameter, every row against the
@@ -335,7 +332,6 @@
         previews = [];
         settings = null;
         pending = [];
-        ranges = [];
         selected = null;
 
         if (!stream) {
@@ -514,41 +510,6 @@
     export const select = (range, { scroll = false } = {}) => {
         selected = range ? range.offset : null;
         wanted = scroll && selected !== null;
-    }
-
-    /**
-     * The range of the block that covers a byte of the stream, which is what a
-     * click on the hex dump is answered with
-     *
-     * @param  {number}    offset  The byte
-     * @return {?object}           The `{offset, length}` of the block, or null
-     */
-    export const tokenAt = (offset) => {
-        /* The blocks are in the order of the stream, so the one that covers a
-           byte is found by halving the list rather than by walking it: a stream
-           of a few hundred kilobytes is tens of thousands of blocks */
-
-        let low = 0;
-        let high = ranges.length - 1;
-
-        while (low <= high) {
-            let middle = (low + high) >> 1;
-            let range = ranges[middle];
-
-            if (offset < range.offset) {
-                high = middle - 1;
-                continue;
-            }
-
-            if (offset >= range.offset + range.length) {
-                low = middle + 1;
-                continue;
-            }
-
-            return range;
-        }
-
-        return null;
     }
 
     /* The block that is marked is put in the page by hand rather than by the
