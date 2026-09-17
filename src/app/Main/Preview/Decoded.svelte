@@ -85,8 +85,8 @@
         let name = header ? ' header' : '';
 
         return `<span class="mnemonic${name}">${mnemonic}</span>`
-            + `<span class="bytes${name}">${bytes}</span>`
-            + `<span class="meaning${name}">${meaning}</span>`;
+            + `<span class="meaning${name}">${meaning}</span>`
+            + `<span class="bytes${name}">${bytes}</span>`;
     }
 
     const block = (type, content) => `<div class="token" data-type="${type}">${content}</div>`;
@@ -267,8 +267,8 @@
 
     div :global(.token) {
         background: #e9e9e9;
-        border-left: 4px solid #888;
-        border-radius: 0 5px 5px 0;
+        border-left: 6px solid #888;
+        border-radius: 6px;
         color: #000;
         font-size: 0.7rem;
         line-height: 150%;
@@ -297,11 +297,13 @@
 
 
     /* The rows of a block are three columns of the same width in every block,
-       so that the names, the bytes and the meanings line up down the pane */
+       the names, the meanings and the bytes, so that they line up down the
+       pane; a run of text is a block of the same columns with its characters
+       and their bytes in the third, under the bytes of the commands */
 
-    div :global(.token:not([data-type="text"])) {
+    div :global(.token) {
         display: grid;
-        grid-template-columns: 11ch 26ch minmax(0, 1fr);
+        grid-template-columns: 11ch minmax(0, 1fr) 26ch;
         column-gap: 12px;
     }
 
@@ -323,13 +325,8 @@
     /* A run of text is a cell per character: the character over the byte it was
        printed with, and the run wraps a character at a time */
 
-    div :global(.token[data-type="text"]) {
-        display: flex;
-        justify-content: space-between;
-        gap: 12px;
-    }
-
     div :global(.token .characters) {
+        grid-column: 3;
         display: flex;
         flex-wrap: wrap;
         gap: 0 6px;
