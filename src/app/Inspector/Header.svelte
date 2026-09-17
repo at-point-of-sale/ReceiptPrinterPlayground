@@ -11,6 +11,8 @@
     import loadIcon from '../../assets/icons/inspector/load.svg?raw';
     import saveIcon from '../../assets/icons/inspector/save.svg?raw';
     import panelsIcon from '../../assets/icons/inspector/panels.svg?raw';
+    import pngIcon from '../../assets/icons/inspector/png.svg?raw';
+    import svgIcon from '../../assets/icons/inspector/svg.svg?raw';
     import printIcon from '../../assets/icons/print.svg?raw';
     import connectIcon from '../../assets/icons/connect.svg?raw';
     import disconnectIcon from '../../assets/icons/disconnect.svg?raw';
@@ -209,11 +211,13 @@
     <Popover bind:popoverRef={saveMenu} label="Save" ontoggle={opened(() => saveRows)}>
         <div class="menu" role="menu" tabindex="-1" bind:this={saveRows} onkeydown={keys(() => saveRows)}>
             <button type="button" role="menuitem" onclick={() => save('png')}>
-                <span class="label">PNG</span>
+                <Icon data={pngIcon} />
+                <span class="label">Save as PNG…</span>
             </button>
 
             <button type="button" role="menuitem" onclick={() => save('svg')}>
-                <span class="label">SVG</span>
+                <Icon data={svgIcon} />
+                <span class="label">Save as SVG…</span>
             </button>
         </div>
     </Popover>
