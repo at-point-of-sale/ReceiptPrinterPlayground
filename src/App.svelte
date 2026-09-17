@@ -2,11 +2,7 @@
 
     import { writable, get } from 'svelte/store';
     import { getEncoder } from './utils/encoder.js';
-
-    import WebUSBReceiptPrinter from '@point-of-sale/webusb-receipt-printer';
-    import WebSerialReceiptPrinter from '@point-of-sale/webserial-receipt-printer';
-    import WebBluetoothReceiptPrinter from '@point-of-sale/webbluetooth-receipt-printer';
-    import ReceiptPrinterRenderer from '@point-of-sale/receipt-printer-renderer';
+    import { connect, disconnect } from './utils/printer.js';
 
     import Header from './app/Header.svelte';
     import Main from './app/Main.svelte';
@@ -31,38 +27,22 @@
     function onconnect(data) {
         let { driver, baudrate } = data;
 
-        /* Setup driver */
+        /* The driver, what it is built with and the device it reports are the
+           same on both pages of this project, so they live in utils/printer.js */
 
-        if (driver === 'usb') {
-            receiptPrinter = new WebUSBReceiptPrinter({ renderer: ReceiptPrinterRenderer });
-        }
-
-        if (driver === 'serial') {
-            receiptPrinter = new WebSerialReceiptPrinter({
-                baudRate: parseInt(baudrate, 10)
-            });
-        }
-
-        if (driver === 'bluetooth') {
-            receiptPrinter = new WebBluetoothReceiptPrinter({ renderer: ReceiptPrinterRenderer });
-        }
-
-
-        /* Event listeners */
-
-        receiptPrinter.addEventListener('connected', data => {
-            console.log('Connected', data);
-            device = data;
-            connected = true;
+        receiptPrinter = connect({
+            driver,
+            baudrate,
+            onconnected: data => {
+                console.log('Connected', data);
+                device = data;
+                connected = true;
+            }
         });
-
-        /* Connect */
-
-        receiptPrinter.connect();
     }
 
     function ondisconnect() {
-        receiptPrinter.disconnect();
+        disconnect(receiptPrinter);
         device = null;
         connected = false;
     }

@@ -3,6 +3,9 @@
     import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 
     import { Icon } from 'svelte-icon';
+
+    import { isSupported } from '../utils/printer.js';
+
     import connectIcon from '../assets/icons/connect.svg?raw';
     import disconnectIcon from '../assets/icons/disconnect.svg?raw';
     import printIcon from '../assets/icons/print.svg?raw';
@@ -12,11 +15,7 @@
     let driver = $state('usb');
     let baudrate = $state('9600');
 
-    let supported = $derived(
-        ( driver === 'bluetooth' && 'bluetooth' in navigator ) ||
-        ( driver === 'usb' && 'usb' in navigator ) ||
-        ( driver === 'serial' && 'serial' in navigator )
-    );
+    let supported = $derived(isSupported(driver));
 
 
     let models = ReceiptPrinterEncoder.printerModels;

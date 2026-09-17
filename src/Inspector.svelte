@@ -4,7 +4,10 @@
 
     import { detect } from '@point-of-sale/receipt-printer-decoder';
 
+    import ReceiptPrinterRenderer, { stitch, toPng } from '@point-of-sale/receipt-printer-renderer';
+
     import { toSettings, toAuto } from './utils/stream.js';
+    import { connect, disconnect } from './utils/printer.js';
 
     import Header from './app/Inspector/Header.svelte';
     import Split from './app/Main/Split.svelte';
@@ -89,6 +92,21 @@
     let bytes = $state(null);
     let detected = $state(null);
     let error = $state('');
+
+    /* What a saved file is named after, which is the file that was loaded
+       without its extension, and `receipt` for a stream that came from a link */
+
+    let base = $state('receipt');
+
+    /* What went wrong while a file was being written, which is the one error
+       this page has that is not about the stream it holds */
+
+    let trouble = $state('');
+
+    /* The printer, which the Print popover connects and prints over */
+
+    let connected = $state(false);
+    let device = $state(null);
 
     let dropping = $state(false);
 
@@ -199,10 +217,152 @@
         }
 
         error = '';
+        trouble = '';
         bytes = data;
         detected = detect(data);
 
+        /* What a saved file is named after: the name of the file that was
+           loaded, with whatever extension it had taken off */
+
+        base = name.replace(/\.[^.]+$/, '') || 'receipt';
+
         document.title = `${name} · Receipt printer inspector`;
+    }
+
+
+    /* Saving: the paper of the Rendered panel as a file, which is the stream
+       rendered again rather than the canvas of the pane read off, so that the
+       image is the paper at its own size whatever the pane shows it at */
+
+    const download = (blob, name, extension) => {
+        let url = URL.createObjectURL(blob);
+
+        let anchor = document.createElement('a');
+
+        anchor.href = url;
+        anchor.download = `${name}.${extension}`;
+
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+
+        /* The browser reads the blob after the click returns, so the URL is let
+           go of a moment later rather than straight away */
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    const save = async (format) => {
+        trouble = '';
+
+        if (!stream) {
+            return;
+        }
+
+        try {
+            let { bytes: data, language, width, codepageMapping } = stream;
+
+            /* The name of the file is read before the rendering rather than
+               after it, so that a file loaded while an image is being made does
+               not give that image its name */
+
+            let name = base;
+
+            if (!ReceiptPrinterRenderer.languages.includes(language)) {
+                throw new Error(`Cannot render ${language} commands`);
+            }
+
+            let renderer = new ReceiptPrinterRenderer({
+                language,
+                width,
+                codepageMapping,
+                commands: [ 'cut', 'pulse', 'feed' ],
+            });
+
+            if (format === 'png') {
+                /* The paper of the whole roll, with a dashed line where it is
+                   cut, which is what the Rendered panel shows */
+
+                let paper = stitch(renderer.render(data), { width, cutMarker: true });
+
+                download(new Blob([await toPng(paper)], { type: 'image/png' }), name, 'png');
+                return;
+            }
+
+            /* And the same roll as one document of outlines and paths, which is
+               the display list rather than the pixels. The writer carries the
+               outlines of the faces, which is the heaviest thing this page can
+               load and the one a reader may never ask for, so it is fetched
+               when it is asked for and not before */
+
+            let { toSvg } = await import('@point-of-sale/receipt-printer-renderer/svg');
+
+            let svg = toSvg(renderer.layout(data), { cutMarker: true });
+
+            download(new Blob([svg], { type: 'image/svg+xml' }), name, 'svg');
+        }
+        catch (e) {
+            trouble = e.message || String(e);
+        }
+    }
+
+
+    /* Printing: the bytes as they were loaded, nothing added and no cut
+       appended, since the file is the job */
+
+    let printer = null;
+
+    const onconnect = ({ driver, baudrate }) => {
+        trouble = '';
+
+        printer = connect({
+            driver,
+            baudrate,
+            onconnected: (data) => {
+                device = data;
+                connected = true;
+            },
+            ondisconnected: () => {
+                device = null;
+                connected = false;
+                printer = null;
+            },
+            onerror: (e) => {
+                trouble = e.message || String(e);
+            },
+        });
+    }
+
+    const ondisconnect = () => {
+        disconnect(printer);
+
+        printer = null;
+        device = null;
+        connected = false;
+    }
+
+    const print = () => {
+        if (!printer || !stream) {
+            return;
+        }
+
+        let failed = (e) => {
+            trouble = e.message || String(e);
+        };
+
+        try {
+            /* A driver prints asynchronously, so a printer that went away in
+               the meantime is a promise that rejects rather than a throw */
+
+            let result = printer.print(stream.bytes);
+
+            if (result && typeof result.catch === 'function') {
+                result.catch(failed);
+            }
+        }
+        catch (e) {
+            failed(e);
+        }
     }
 
     const open = () => picker?.click();
@@ -332,15 +492,29 @@
 <Header
     onopen={open}
     ontoggle={toggle}
+    onsave={save}
+    {onconnect}
+    {ondisconnect}
+    onprint={print}
     bind:model
     {detected}
     language={stream?.language || null}
     loaded={!!stream}
+    {connected}
+    {device}
     panels={PANELS}
     {shown}
 />
 
 <input type="file" bind:this={picker} onchange={chosen} hidden />
+
+{#if trouble}
+    <div class="trouble" role="alert">
+        {trouble}
+
+        <button type="button" onclick={() => trouble = ''} aria-label="Dismiss">&times;</button>
+    </div>
+{/if}
 
 {#if stream}
     {#each panels as panel, index (panel.id)}
@@ -360,7 +534,7 @@
             <Split
                 name="inspector-{panel.id}"
                 column={index * 2 + 2}
-                row={2}
+                row={3}
                 minimum={MINIMUM}
                 reserve={reserve(index)}
                 {initial}
@@ -394,14 +568,14 @@
 
     :global(body) {
         display: grid;
-        grid-template-rows: 61px 1fr;
+        grid-template-rows: 61px auto 1fr;
         height: 100vh;
     }
 
     /* A panel is a column that scrolls, in the grey the panes are shown on */
 
     .panel {
-        grid-row: 2;
+        grid-row: 3;
         background: #fafafa;
         overflow: scroll;
     }
@@ -417,7 +591,7 @@
     /* The page before a file has been loaded */
 
     .empty {
-        grid-row: 2;
+        grid-row: 3;
         grid-column: 1 / -1;
 
         display: grid;
@@ -439,6 +613,41 @@
     .empty .error {
         margin-bottom: 6px;
         color: #000;
+    }
+
+    /* What went wrong while a file was being written: a row of its own between
+       the header and the panels, which pushes them down rather than covering
+       them, until it is dismissed or another file is loaded */
+
+    .trouble {
+        grid-row: 2;
+        grid-column: 1 / -1;
+
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-sizing: border-box;
+        padding: 8px 15px;
+
+        background: #fff3cd;
+        border-bottom: 1px solid #ffe69c;
+
+        font-family: system-ui;
+        font-size: 9pt;
+        color: #664d03;
+    }
+
+    .trouble button {
+        height: 20px;
+        margin: 0 0 0 auto;
+        padding: 0 6px;
+        border-radius: 4px;
+        background: transparent;
+
+        font-size: 12pt;
+        line-height: 1;
+        color: #664d03;
+        cursor: pointer;
     }
 
     /* And the page while a file is being dragged over it */

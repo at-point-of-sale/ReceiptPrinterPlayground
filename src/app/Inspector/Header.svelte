@@ -4,12 +4,16 @@
 
     import { Icon } from 'svelte-icon';
 
+    import { isSupported } from '../../utils/printer.js';
+
     import Popover from '../common/Popover.svelte';
 
     import loadIcon from '../../assets/icons/inspector/load.svg?raw';
     import saveIcon from '../../assets/icons/inspector/save.svg?raw';
     import panelsIcon from '../../assets/icons/inspector/panels.svg?raw';
     import printIcon from '../../assets/icons/print.svg?raw';
+    import connectIcon from '../../assets/icons/connect.svg?raw';
+    import disconnectIcon from '../../assets/icons/disconnect.svg?raw';
 
     /*
         The header of the inspector.
@@ -18,25 +22,43 @@
         the far end, the panels that are shown and the printer. Everything that
         needs a stream is disabled until one is loaded, which is everything but
         Load and the panels.
+
+        Three of the buttons open a panel under themselves. Panels and Save are
+        menus, a row per thing that can be picked; Print is a form, the printer
+        connection the playground keeps in its own header, with the model of
+        this header in the middle of it so that it is preselected and can be
+        changed where the printing is about to happen.
     */
 
     /**
      * @prop {Function} onopen - Called when Load is pressed
      * @prop {Function} ontoggle - Called with the id of the panel a menu row was clicked on
+     * @prop {Function} onsave - Called with 'png' or 'svg', the format that was picked
+     * @prop {Function} onconnect - Called with `{driver, baudrate}` when Connect is pressed
+     * @prop {Function} ondisconnect - Called when Disconnect is pressed
+     * @prop {Function} onprint - Called when the stream is to be printed
      * @prop {string} model - Bindable id of the printer model, empty for Auto
      * @prop {?string} detected - The language the decoder found, or null
      * @prop {?string} language - The language the stream is read as, or null
      * @prop {boolean} loaded - Whether there is a stream
+     * @prop {boolean} connected - Whether a printer is connected
+     * @prop {?object} device - What the driver reported about the printer, or null
      * @prop {object[]} panels - The panels, `{id, label, icon}` with the icon an SVG string
      * @prop {string[]} shown - The ids of the panels that are shown
      */
     let {
         onopen,
         ontoggle,
+        onsave,
+        onconnect,
+        ondisconnect,
+        onprint,
         model = $bindable(''),
         detected = null,
         language = null,
         loaded = false,
+        connected = false,
+        device = null,
         panels = [],
         shown = [],
     } = $props();
@@ -72,26 +94,98 @@
         `Detected ${spell(detected)}` : '');
 
 
-    /* The menu of the panels */
+    /* What is kept between visits, which is what the playground keeps as well,
+       under keys of this page */
+
+    const remembered = (key, fallback) => {
+        try {
+            return localStorage.getItem(key) || fallback;
+        }
+        catch (error) {
+            return fallback;
+        }
+    }
+
+    const remember = (key, value) => {
+        try {
+            localStorage.setItem(key, value);
+        }
+        catch (error) {
+            /* A browser that keeps nothing starts fresh every time, which is no
+               reason to fail */
+        }
+    }
+
+
+    /* The printer */
+
+    let driver = $state(remembered('inspector-driver', 'usb'));
+    let baudrate = $state(remembered('inspector-baudrate', '9600'));
+
+    let supported = $derived(isSupported(driver));
+
+    $effect(() => {
+        remember('inspector-driver', driver);
+    });
+
+    $effect(() => {
+        remember('inspector-baudrate', baudrate);
+    });
+
+    /* What the driver said about the printer it found: the name of the device
+       where it has one, a USB printer by its manufacturer and its product and a
+       Bluetooth one by the name it advertises, and the language it speaks. A
+       serial printer is a line and not a device, so it has neither */
+
+    let described = $derived.by(() => {
+        if (!connected || !device) {
+            return '';
+        }
+
+        let name = device.name ||
+            [device.manufacturerName, device.productName].filter(Boolean).join(' ');
+
+        let parts = [name, device.language ? spell(device.language) : ''].filter(Boolean);
+
+        return parts.length ? parts.join(' · ') : 'Connected';
+    });
+
+    /* And whether that language is the one the stream is read as, which is the
+       one thing about a connected printer that is worth a warning */
+
+    let mismatch = $derived(connected && device?.language && language &&
+        family(device.language) !== family(language) ?
+        `The printer speaks ${spell(device.language)}, the stream is ${spell(language)}` : '');
+
+
+    /* The panels that popovers hold, and where the focus goes when one opens */
 
     let button = $state(null);
     let menu = $state(null);
     let rows = $state(null);
 
-    const opened = (open) => {
+    let saveButton = $state(null);
+    let saveMenu = $state(null);
+    let saveRows = $state(null);
+
+    let printButton = $state(null);
+    let printMenu = $state(null);
+    let printForm = $state(null);
+
+    const opened = (get, selector = 'button:not(:disabled)') => (open) => {
         if (!open) {
             return;
         }
 
         requestAnimationFrame(() => {
-            let row = rows?.querySelector('button:not(:disabled)');
-
-            row?.focus();
+            get()?.querySelector(selector)?.focus();
         });
     }
 
-    const keys = (event) => {
-        let buttons = [...(rows?.querySelectorAll('button:not(:disabled)') || [])];
+    /* Up and down walk the rows of a menu, as they do in a menu of the system */
+
+    const keys = (get) => (event) => {
+        let buttons = [...(get()?.querySelectorAll('button:not(:disabled)') || [])];
         let index = buttons.indexOf(document.activeElement);
 
         let target = event.key === 'ArrowDown' ? index + 1 :
@@ -108,6 +202,13 @@
         buttons[(target + buttons.length) % buttons.length]?.focus();
     }
 
+    /* A format picked from the Save menu is a menu that has done its work */
+
+    const save = (format) => {
+        saveMenu?.hide();
+        onsave(format);
+    }
+
 </script>
 
 <header>
@@ -116,7 +217,13 @@
         Load
     </button>
 
-    <button id="save" aria-haspopup="menu" disabled={!loaded}>
+    <button
+        id="save"
+        bind:this={saveButton}
+        aria-haspopup="menu"
+        disabled={!loaded}
+        onclick={() => saveMenu?.show(saveButton)}
+    >
         <Icon data={saveIcon} />
         Save
 
@@ -124,6 +231,18 @@
             <path fill="currentColor" d="M43 17.1L39.9 14 24 29.9 8.1 14 5 17.1 24 36z"></path>
         </svg>
     </button>
+
+    <Popover bind:popoverRef={saveMenu} label="Save" ontoggle={opened(() => saveRows)}>
+        <div class="menu" role="menu" tabindex="-1" bind:this={saveRows} onkeydown={keys(() => saveRows)}>
+            <button type="button" role="menuitem" onclick={() => save('png')}>
+                <span class="label">PNG</span>
+            </button>
+
+            <button type="button" role="menuitem" onclick={() => save('svg')}>
+                <span class="label">SVG</span>
+            </button>
+        </div>
+    </Popover>
 
     <select id="model" bind:value={model}>
         <option value="">{auto}</option>
@@ -146,8 +265,8 @@
         </svg>
     </button>
 
-    <Popover bind:popoverRef={menu} label="Panels" ontoggle={opened}>
-        <div class="menu" role="menu" tabindex="-1" bind:this={rows} onkeydown={keys}>
+    <Popover bind:popoverRef={menu} label="Panels" ontoggle={opened(() => rows)}>
+        <div class="menu" role="menu" tabindex="-1" bind:this={rows} onkeydown={keys(() => rows)}>
             {#each panels as panel}
                 <button
                     type="button"
@@ -164,10 +283,95 @@
         </div>
     </Popover>
 
-    <button id="print" aria-haspopup="menu" disabled={!loaded}>
+    <!-- The connection outlives the stream, so the popover opens whether or not
+         there is one; the button that sends is the one that waits for it -->
+
+    <button
+        id="print"
+        bind:this={printButton}
+        aria-haspopup="dialog"
+        onclick={() => printMenu?.show(printButton)}
+    >
         <Icon data={printIcon} />
         Print
+
+        <svg class="chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+            <path fill="currentColor" d="M43 17.1L39.9 14 24 29.9 8.1 14 5 17.1 24 36z"></path>
+        </svg>
     </button>
+
+    <Popover bind:popoverRef={printMenu} label="Print" ontoggle={opened(() => printForm, 'select, button')}>
+        <div class="form" bind:this={printForm}>
+            <label class="row">
+                <span>Driver</span>
+
+                <select id="printer-driver" bind:value={driver} disabled={connected}>
+                    <option value="usb">USB</option>
+                    <option value="serial">Serial</option>
+                    <option value="bluetooth">Bluetooth</option>
+                </select>
+            </label>
+
+            {#if driver === 'serial'}
+                <label class="row">
+                    <span>Baud rate</span>
+
+                    <select id="printer-baudrate" bind:value={baudrate} disabled={connected}>
+                        <option value="9600">9600</option>
+                        <option value="38400">38400</option>
+                        <option value="115200">115200</option>
+                    </select>
+                </label>
+            {/if}
+
+            <label class="row">
+                <span>Model</span>
+
+                <select id="printer-model" bind:value={model}>
+                    <option value="">{auto}</option>
+                    <hr>
+                    {#each models as printer}
+                        <option value={printer.id}>{printer.name}</option>
+                    {/each}
+                </select>
+            </label>
+
+            {#if !connected}
+                <button
+                    type="button"
+                    id="connect"
+                    disabled={!supported}
+                    onclick={() => onconnect({ driver, baudrate })}
+                >
+                    <Icon data={connectIcon} />
+                    Connect
+                </button>
+            {:else}
+                <button type="button" id="disconnect" onclick={() => ondisconnect()}>
+                    <Icon data={disconnectIcon} />
+                    Disconnect
+                </button>
+            {/if}
+
+            {#if described}
+                <p class="status">{described}</p>
+            {/if}
+
+            {#if mismatch}
+                <p class="warning">{mismatch}</p>
+            {/if}
+
+            <button
+                type="button"
+                id="send"
+                disabled={!connected || !loaded}
+                onclick={() => onprint()}
+            >
+                <Icon data={printIcon} />
+                Print
+            </button>
+        </div>
+    </Popover>
 </header>
 
 
@@ -269,6 +473,73 @@
         width: 1em;
         color: #1976d2;
         text-align: right;
+    }
+
+
+    /* And the printer, which is not a menu but the connection of the
+       playground's header in a column: what to connect over, what the printer
+       is, the connection itself and the button that prints over it */
+
+    .form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 260px;
+        padding: 12px;
+    }
+
+    .form .row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+
+        font-family: system-ui;
+        font-size: 10pt;
+        color: #333;
+    }
+
+    .form .row span {
+        flex: 1;
+    }
+
+    /* The selects and the buttons of the header carry the margin of the header,
+       which is not the spacing of a panel */
+
+    .form select {
+        width: 150px;
+        margin: 0;
+        background-color: #f0f0f0;
+    }
+
+    .form button {
+        justify-content: center;
+        width: 100%;
+        margin: 0;
+    }
+
+    .form button#connect {
+        background-color: #bbdefb;
+        color: #1976d2;
+    }
+
+    .form button#send {
+        background-color: #f0f0f0;
+    }
+
+    /* What the driver reported, and the one thing about it worth a warning */
+
+    .form .status,
+    .form .warning {
+        margin: 0;
+
+        font-family: system-ui;
+        font-size: 9pt;
+        color: #888;
+        text-align: center;
+    }
+
+    .form .warning {
+        color: #b26500;
     }
 
 </style>
