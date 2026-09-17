@@ -555,12 +555,12 @@
 {#if stream}
     {#each panels as panel, index (panel.id)}
         <div
-            class="panel stacked"
+            class="panel"
             class:paper={panel.id === 'rendered'}
             style="grid-column: {index * 2 + 1};"
         >
             {#if panel.id === 'hex'}
-                <Toolbar picks="language" bind:language {detected} />
+                <Toolbar picks="language" bind:language {detected} dark />
             {:else if panel.id === 'rendered'}
                 <Toolbar picks="model" bind:model {language} {detected} />
             {:else}
@@ -634,21 +634,6 @@
         font-family: var(--font-stack-mono);
         font-size: 0.75rem;
         color: #888;
-    }
-
-    /* A panel is a column of two: the row of its picker at the top, which stays
-       where it is, and the pane, which scrolls under it. A panel with nothing to
-       pick keeps the row empty, so that the columns start at one height */
-
-    .panel.stacked {
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .panel.stacked main {
-        flex: 1;
-        overflow: auto;
     }
 
     /* And the panel the paper is on is darker than the others, so that the white

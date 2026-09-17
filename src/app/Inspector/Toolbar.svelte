@@ -20,12 +20,15 @@
     /**
      * @prop {string} picks - Which picker this is, `language`, `model`, or
      *                        nothing at all for a row that only keeps the height
+     * @prop {boolean} dark - Whether the select is grey rather than white, which
+     *                        is what a picker on a pale panel needs to show
      * @prop {string} language - Bindable language the stream is read as, empty for Auto
      * @prop {string} model - Bindable id of the model, a generic or a printer
      * @prop {?string} detected - The language the decoder found, or null
      */
     let {
         picks = '',
+        dark = false,
         language = $bindable(''),
         model = $bindable(''),
         detected = null,
@@ -43,7 +46,7 @@
 
 </script>
 
-<div class="toolbar">
+<div class="toolbar" class:dark>
     {#if picks === 'language'}
         <select id="language" bind:value={language} aria-label="Language">
             <option value="">{auto}</option>
@@ -71,17 +74,19 @@
 
 <style>
 
-    /* A row of its own at the top of the panel, half the height of the header
-       and with the panel's background, so that it reads as the top of the panel
-       rather than as a second bar of the page */
+    /* A row of its own at the top of the panel, above the pane and scrolling
+       away with it, with the panel's background rather than a bar of its own: it
+       is the top of the panel and not a second header.
+
+       What is under it is the spacing of the pane, which every pane has, so the
+       row carries the room above the picker alone. */
 
     .toolbar {
         display: flex;
         align-items: center;
         box-sizing: border-box;
-        height: 46px;
-        padding: 0 20px;
-        flex-shrink: 0;
+        min-height: 52px;
+        padding: 20px 20px 0;
     }
 
     /* The selects of this application carry the margin of the header, which is
@@ -90,6 +95,14 @@
     .toolbar select {
         margin: 0;
         max-width: 100%;
+    }
+
+    /* A picker on a pale panel is grey rather than white, or there is nothing to
+       see it by; the chevron is the background image of every select of this
+       application, so only the colour behind it is changed */
+
+    .toolbar.dark select {
+        background-color: #e4e4e4;
     }
 
 </style>
