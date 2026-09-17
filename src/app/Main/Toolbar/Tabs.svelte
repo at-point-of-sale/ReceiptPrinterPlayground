@@ -12,12 +12,12 @@
     let { view } = $props();
 
     const tabs = [
-        { value: 'text',     label: 'Text',     icon: textIcon },
+        { value: 'text',     label: 'Preview',  icon: textIcon },
         { value: 'commands', label: 'Commands', icon: commandsIcon },
         { value: 'encoded',  label: 'Encoded',  icon: encodedIcon },
         { value: 'output',   label: 'Output',   icon: outputIcon },
         { value: 'decoded',  label: 'Decoded',  icon: decodedIcon },
-        { value: 'image',    label: 'Image',    icon: imageIcon },
+        { value: 'image',    label: 'Rendered', icon: imageIcon },
     ];
 
 </script>
