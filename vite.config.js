@@ -25,6 +25,15 @@ export default defineConfig({
 
   build: {
     rollupOptions: {
+      /* The two pages of this project, which share everything they can: the
+         chunks they have in common land under `dist/assets` and a pane fixed
+         for one page is fixed for the other */
+
+      input: {
+        main: 'index.html',
+        inspector: 'inspector.html',
+      },
+
       external
     }
   }

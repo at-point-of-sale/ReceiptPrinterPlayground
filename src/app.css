@@ -64,12 +64,8 @@ button:disabled svg {
   opacity: 0.5;
 }
 
-body {
-  display: grid;
-  grid-template-rows: 61px min-content 1fr;
-  grid-template-columns: minmax(240px, var(--split, 50vw)) 6px minmax(240px, 1fr);
-  height: 100vh;
-}
+/* The grid of the page is the page's own, because the two pages of this
+   project have a different one; what is shared is everything below and above */
 
 /* While the split is dragged nothing on the page is selected, and the pointer
    keeps the cursor of the gutter wherever it has got to */

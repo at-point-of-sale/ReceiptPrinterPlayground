@@ -90,3 +90,17 @@
 
 <Header {onconnect} {ondisconnect} {onprint} {model} {connected} />
 <Main {contents} {model} />
+
+<style>
+
+    /* The grid of the playground: the header, the toolbar and the row of the
+       editor and the preview, with the gutter between them */
+
+    :global(body) {
+        display: grid;
+        grid-template-rows: 61px min-content 1fr;
+        grid-template-columns: minmax(240px, var(--split, 50vw)) 6px minmax(240px, 1fr);
+        height: 100vh;
+    }
+
+</style>
