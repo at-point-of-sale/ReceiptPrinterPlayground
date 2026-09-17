@@ -77,7 +77,7 @@
 
 </script>
 
-<div id="preview">
+<div id="preview" class:paper={$view === 'image'}>
     {#if errors.length > 0}
         <div id="errors">
             {#each errors as error}
@@ -103,6 +103,14 @@
         grid-column: 3;
         background: #fafafa;
         overflow: scroll;
+    }
+
+    /* The rendered view is shown on the same darker grey as the paper panel of
+       the inspector, so that the white of the paper is the receipt and not the
+       page */
+
+    #preview.paper {
+        background: #e4e4e4;
     }
 
     #errors div {
