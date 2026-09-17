@@ -43,8 +43,8 @@
        is left. A panel that is not in the table is the flexible one */
 
     const SIZES = {
-        hex:      { width: 560, maximum: 800 },
-        rendered: { width: 480, maximum: 800 },
+        hex:      { width: 540, maximum: 540 },
+        rendered: { width: 480, maximum: 488 },
     };
 
     /* What a panel is never narrower than, and how wide a gutter is, which are
