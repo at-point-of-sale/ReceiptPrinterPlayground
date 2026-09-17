@@ -588,7 +588,7 @@
         if (wanted) {
             wanted = false;
 
-            node.scrollIntoView({ block: 'nearest' });
+            node.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     });
 
@@ -711,7 +711,16 @@
     }
 
     div :global(.token.selected) {
-        box-shadow: inset 0 0 0 2px #2196F3;
+        outline: 2px solid #2196F3;
+        outline-offset: 0;
+        box-shadow: 0 0 8px rgba(33, 150, 243, 0.5);
+    }
+
+    /* And a block that is scrolled to keeps a little room above and below it,
+       rather than standing against the edge of the panel */
+
+    div :global(.token) {
+        scroll-margin-block: 48px;
     }
 
 

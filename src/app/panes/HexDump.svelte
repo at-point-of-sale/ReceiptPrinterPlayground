@@ -315,7 +315,13 @@
                 return;
             }
 
-            scroller.scrollTop = Math.max(0, top - scroller.clientHeight / 3);
+            scroller.scrollTo({
+                top: Math.max(0, top - scroller.clientHeight / 3),
+                behavior: 'smooth',
+            });
+
+            /* The rows follow the scroll, which fires for every frame of it, so
+               the ones that arrive under the pointer are drawn as it goes */
 
             measure();
         });
@@ -422,6 +428,15 @@
     .hex :global(.selected) {
         background: #bbdefb;
         color: #1976d2;
+    }
+
+    /* A cell of the hex column reaches into the gap beside it and is pulled
+       back by as much, so that a run of them is one bar across the row rather
+       than a row of separate marks, and nothing moves */
+
+    .hex :global(.bytes .cell.selected) {
+        padding: 0 3px;
+        margin: 0 -3px;
     }
 
     .hex :global(.selected .dot) {
