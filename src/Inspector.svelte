@@ -6,7 +6,7 @@
 
     import ReceiptPrinterRenderer, { stitch, toPng } from '@point-of-sale/receipt-printer-renderer';
 
-    import { toSettings, toAuto } from './utils/stream.js';
+    import { toModel, modelsFor, GENERICS, DEFAULT_MODEL } from './utils/stream.js';
     import { connect, disconnect } from './utils/printer.js';
 
     import Header from './app/Inspector/Header.svelte';
@@ -87,7 +87,13 @@
 
     /* State */
 
-    let model = $state(remembered('inspector-model') || '');
+    /* The model the bytes are read at, which is kept between visits, and the
+       language they are read in, which is not: a file names its own language
+       through the detector, and the picker is only how that is overruled */
+
+    let model = $state(remembered('inspector-model') || DEFAULT_MODEL);
+    let language = $state('');
+
     let shown = $state(readPanels());
 
     let bytes = $state(null);
@@ -120,26 +126,27 @@
     let decoded = $state(null);
 
 
-    /* The stream the panels render. Auto is the language that was detected, at
-       the width and the mapping the encoder falls back to; a model is the
-       language, the width and the mapping of that printer */
+    /* What the bytes are read as: the language that was picked, or the one that
+       was detected when that is Auto, and the width and the codepage mapping of
+       the model. The language is the picker's alone, so a printer of another
+       language lends its paper and nothing else */
+
+    let reading = $derived(language || detected);
 
     let stream = $derived.by(() => {
         if (!bytes) {
             return null;
         }
 
-        if (model) {
-            try {
-                return { bytes, ...toSettings(model) };
-            }
-            catch (e) {
-                /* A model the encoder cannot build is no reason to show nothing,
-                   so the bytes are read the way Auto reads them */
-            }
+        try {
+            return { bytes, language: reading, ...toModel(model, reading) };
         }
+        catch (e) {
+            /* A model the encoder cannot build is no reason to show nothing, so
+               the bytes are read at the width a file starts on */
 
-        return { bytes, ...toAuto(detected) };
+            return { bytes, language: reading, ...toModel(DEFAULT_MODEL, reading) };
+        }
     });
 
     let panels = $derived(PANELS.filter((panel) => shown.includes(panel.id)));
@@ -178,6 +185,31 @@
 
     $effect(() => {
         remember('inspector-model', model);
+    });
+
+    /* A model that does not speak the language the stream is read in is not a
+       model of this stream: the picker falls back to the plain width, which is
+       what a file starts on anyway. This is what a language that has just been
+       picked does to the model, and what the model kept from the last visit has
+       to answer to the moment a file names its language */
+
+    $effect(() => {
+        let current = reading;
+
+        if (!current) {
+            return;
+        }
+
+        let allowed = [
+            ...GENERICS.map((generic) => generic.id),
+            ...modelsFor(current).map((printer) => printer.id),
+        ];
+
+        untrack(() => {
+            if (!allowed.includes(model)) {
+                model = DEFAULT_MODEL;
+            }
+        });
     });
 
     $effect(() => {
@@ -221,6 +253,10 @@
         trouble = '';
         bytes = data;
         detected = detect(data);
+
+        /* A new file is a new language, whatever the last one was read as */
+
+        language = '';
 
         /* What a saved file is named after: the name of the file that was
            loaded, with whatever extension it had taken off */
@@ -498,7 +534,6 @@
     {ondisconnect}
     onprint={print}
     bind:model
-    {detected}
     language={stream?.language || null}
     loaded={!!stream}
     {connected}
@@ -519,9 +554,17 @@
 
 {#if stream}
     {#each panels as panel, index (panel.id)}
-        <div class="panel" class:paper={panel.id === 'rendered'} style="grid-column: {index * 2 + 1};">
-            {#if panel.id === 'rendered'}
-                <Toolbar bind:model {detected} language={stream?.language || null} />
+        <div
+            class="panel stacked"
+            class:paper={panel.id === 'rendered'}
+            style="grid-column: {index * 2 + 1};"
+        >
+            {#if panel.id === 'hex'}
+                <Toolbar picks="language" bind:language {detected} />
+            {:else if panel.id === 'rendered'}
+                <Toolbar picks="model" bind:model {language} {detected} />
+            {:else}
+                <Toolbar />
             {/if}
 
             <main>
@@ -593,21 +636,26 @@
         color: #888;
     }
 
-    /* The panel the paper is on is darker than the others, so that the white of
-       the paper is the receipt and not the panel, and it is a column of two: the
-       row of the model at the top, which stays where it is, and the paper, which
-       scrolls under it */
+    /* A panel is a column of two: the row of its picker at the top, which stays
+       where it is, and the pane, which scrolls under it. A panel with nothing to
+       pick keeps the row empty, so that the columns start at one height */
 
-    .panel.paper {
+    .panel.stacked {
         display: flex;
         flex-direction: column;
-        background: #e4e4e4;
         overflow: hidden;
     }
 
-    .panel.paper main {
+    .panel.stacked main {
         flex: 1;
         overflow: auto;
+    }
+
+    /* And the panel the paper is on is darker than the others, so that the white
+       of the paper is the receipt and not the panel */
+
+    .panel.paper {
+        background: #e4e4e4;
     }
 
     /* The page before a file has been loaded */

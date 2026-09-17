@@ -1,56 +1,70 @@
 <script>
 
-    import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
-
-    import { spell, family } from '../../utils/language.js';
+    import { spell, LANGUAGES } from '../../utils/language.js';
+    import { modelsFor, GENERICS } from '../../utils/stream.js';
 
     /*
-        The toolbar of the Rendered panel: the model the bytes are read as.
+        The toolbar of a panel: one picker, at the top of the panel it belongs
+        to.
 
-        It belongs to that panel rather than to the header, because what it
-        changes is what the paper looks like, and it sits still at the top of the
-        panel while the paper scrolls underneath it. The Print popover holds the
-        same selector bound to the same value, so a printer can be chosen where
-        the printing happens as well.
+        The hex dump carries the language, because the bytes are what a language
+        is read out of, and the Rendered panel carries the model, because what a
+        model changes is the width of the paper. Both sit still at the top of
+        their panel while what is under them scrolls, and both look the same.
+
+        The two are one component because the row is the same row; what differs
+        is the one select in it. A panel with nothing to pick has the row all the
+        same, empty, so that the three columns of the page start at one height.
     */
 
     /**
-     * @prop {string} model - Bindable id of the printer model, empty for Auto
+     * @prop {string} picks - Which picker this is, `language`, `model`, or
+     *                        nothing at all for a row that only keeps the height
+     * @prop {string} language - Bindable language the stream is read as, empty for Auto
+     * @prop {string} model - Bindable id of the model, a generic or a printer
      * @prop {?string} detected - The language the decoder found, or null
-     * @prop {?string} language - The language the stream is read as, or null
      */
     let {
+        picks = '',
+        language = $bindable(''),
         model = $bindable(''),
         detected = null,
-        language = null,
     } = $props();
 
-    let models = ReceiptPrinterEncoder.printerModels;
-
-    /* What the first option of the selector says: the detected language once a
-       file has been read, and nothing at all before that */
+    /* What the first option of the language says: the language that was found
+       in the bytes, which is what Auto reads them as */
 
     let auto = $derived(detected ? `Auto (${spell(detected)})` : 'Auto');
 
-    /* A model whose language is not the one that was detected is allowed, since
-       detection can be wrong, and this is where the page says so */
+    /* And which printers the model offers, which are the printers that speak the
+       language the stream is read in */
 
-    let note = $derived(detected && language && family(language) !== family(detected) ?
-        `Detected ${spell(detected)}` : '');
+    let models = $derived(modelsFor(language || detected));
 
 </script>
 
 <div class="toolbar">
-    <select id="model" bind:value={model}>
-        <option value="">{auto}</option>
-        <hr>
-        {#each models as printer}
-            <option value={printer.id}>{printer.name}</option>
-        {/each}
-    </select>
+    {#if picks === 'language'}
+        <select id="language" bind:value={language} aria-label="Language">
+            <option value="">{auto}</option>
+            <hr>
+            {#each LANGUAGES as value}
+                <option {value}>{spell(value)}</option>
+            {/each}
+        </select>
+    {:else if picks === 'model'}
+        <select id="model" bind:value={model} aria-label="Printer model">
+            {#each GENERICS as generic}
+                <option value={generic.id}>{generic.name}</option>
+            {/each}
 
-    {#if note}
-        <span class="note">{note}</span>
+            {#if models.length}
+                <hr>
+                {#each models as printer}
+                    <option value={printer.id}>{printer.name}</option>
+                {/each}
+            {/if}
+        </select>
     {/if}
 </div>
 
@@ -76,19 +90,6 @@
     .toolbar select {
         margin: 0;
         max-width: 100%;
-    }
-
-    /* What was detected, beside the model that is not it */
-
-    .toolbar .note {
-        margin-left: 12px;
-        overflow: hidden;
-
-        font-family: system-ui;
-        font-size: 9pt;
-        color: #888;
-        white-space: nowrap;
-        text-overflow: ellipsis;
     }
 
 </style>

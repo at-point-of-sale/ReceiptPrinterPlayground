@@ -1,11 +1,10 @@
 <script>
 
-    import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
-
     import { Icon } from 'svelte-icon';
 
     import { isSupported } from '../../utils/printer.js';
     import { spell, family } from '../../utils/language.js';
+    import { modelsFor, GENERICS } from '../../utils/stream.js';
 
     import Popover from '../common/Popover.svelte';
 
@@ -38,9 +37,8 @@
      * @prop {Function} onconnect - Called with `{driver, baudrate}` when Connect is pressed
      * @prop {Function} ondisconnect - Called when Disconnect is pressed
      * @prop {Function} onprint - Called when the stream is to be printed
-     * @prop {string} model - Bindable id of the printer model, empty for Auto,
-     *                        which the Print popover shows a selector for
-     * @prop {?string} detected - The language the decoder found, or null
+     * @prop {string} model - Bindable id of the model, which the Print popover
+     *                        shows the Rendered panel's selector for
      * @prop {?string} language - The language the stream is read as, or null
      * @prop {boolean} loaded - Whether there is a stream
      * @prop {boolean} connected - Whether a printer is connected
@@ -56,7 +54,6 @@
         ondisconnect,
         onprint,
         model = $bindable(''),
-        detected = null,
         language = null,
         loaded = false,
         connected = false,
@@ -65,13 +62,11 @@
         shown = [],
     } = $props();
 
-    let models = ReceiptPrinterEncoder.printerModels;
+    /* The printers the model offers, which are the printers that speak the
+       language the stream is read in. The selector itself is the Rendered
+       panel's, and this is the copy of it the popover holds */
 
-    /* What the first option of the selector says: the detected language once a
-       file has been read, and nothing at all before that. The selector itself is
-       the Rendered panel's, and this is the copy of it the popover holds */
-
-    let auto = $derived(detected ? `Auto (${spell(detected)})` : 'Auto');
+    let models = $derived(modelsFor(language));
 
     /* What is kept between visits, which is what the playground keeps as well,
        under keys of this page */
@@ -273,11 +268,16 @@
                     <span>Model</span>
 
                     <select id="printer-model" bind:value={model}>
-                        <option value="">{auto}</option>
-                        <hr>
-                        {#each models as printer}
-                            <option value={printer.id}>{printer.name}</option>
+                        {#each GENERICS as generic}
+                            <option value={generic.id}>{generic.name}</option>
                         {/each}
+
+                        {#if models.length}
+                            <hr>
+                            {#each models as printer}
+                                <option value={printer.id}>{printer.name}</option>
+                            {/each}
+                        {/if}
                     </select>
                 </label>
 

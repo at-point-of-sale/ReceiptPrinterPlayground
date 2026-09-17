@@ -2,10 +2,11 @@
     How a language is spelled where a person reads it, and which languages are
     one language to whatever reads a stream.
 
-    Two places on the inspector say what a stream is: the model row at the top of
-    the Rendered panel, which names the language that was detected, and the Print
-    popover, which names the language the connected printer speaks. They say it
-    the same way, so they say it from here.
+    Three places on the inspector say what a stream is: the language row at the
+    top of the hex dump, which is where the language is picked, the model row at
+    the top of the Rendered panel, and the Print popover, which names the
+    language the connected printer speaks. They say it the same way, so they say
+    it from here.
 */
 
 const NAMES = {
@@ -23,6 +24,11 @@ const NAMES = {
  */
 const spell = (value) => NAMES[value] || value;
 
+/* The languages a stream can be read in, which are the languages the decoder
+   reads and the renderer draws, in the order the picker offers them */
+
+const LANGUAGES = Object.keys(NAMES);
+
 /**
  * The family a language belongs to
  *
@@ -35,4 +41,4 @@ const spell = (value) => NAMES[value] || value;
  */
 const family = (value) => value === 'star-line' ? 'star-prnt' : value;
 
-export { spell, family };
+export { spell, family, LANGUAGES };
