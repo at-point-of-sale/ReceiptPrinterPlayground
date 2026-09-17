@@ -38,6 +38,15 @@
         { id: 'rendered', label: 'Rendered', icon: imageIcon },
     ];
 
+    /* How wide the panels that have a width of their own are: the hex dump and
+       the paper are read at a size that suits them, and the commands take what
+       is left. A panel that is not in the table is the flexible one */
+
+    const SIZES = {
+        hex:      { width: 560, maximum: 800 },
+        rendered: { width: 480, maximum: 800 },
+    };
+
     /* What a panel is never narrower than, and how wide a gutter is, which are
        the two numbers the grid of the page is built out of */
 
@@ -151,33 +160,53 @@
 
     let panels = $derived(PANELS.filter((panel) => shown.includes(panel.id)));
 
-    /* The columns of the page, out of the panels that are shown: every one but
-       the last is a column that can be dragged and a gutter behind it, and the
-       last one takes what is left */
+    /* Which panel takes what the others leave: the commands, which are a list
+       and read better wide, and when they are hidden whichever of the other two
+       is left. A page of one panel is that panel, wide */
 
-    let template = $derived(panels.map((panel, index) => index === panels.length - 1 ?
+    let flexible = $derived(['decoded', 'rendered', 'hex'].find((id) => shown.includes(id)));
+
+    /* The columns of the page, out of the panels that are shown: a panel with a
+       width of its own is that width, dragged and kept under its own name, and
+       the flexible one takes what is left, with a gutter between two panels */
+
+    let template = $derived(panels.map((panel) => panel.id === flexible ?
         `minmax(${MINIMUM}px, 1fr)` :
-        `minmax(${MINIMUM}px, var(--inspector-${panel.id}, 33vw)) ${GUTTER}px`).join(' '));
+        `minmax(${MINIMUM}px, var(--inspector-${panel.id}, ${SIZES[panel.id].width}px))`)
+        .join(` ${GUTTER}px `));
 
-    /* What has to stay behind a gutter, which is the gutter itself, every pane
-       between it and the last one at the width it is at, and the last pane at
-       its minimum, since that is all it will give up. The columns are measured
-       when a drag begins, because a gutter behind this one may have been moved
-       since the page was laid out */
+    /* Which panel a gutter drags, which is the one of the two beside it that
+       has a width of its own, and which side of the gutter that panel is on */
+
+    const dragged = (index) => panels[index].id === flexible ? panels[index + 1] : panels[index];
+    const side = (index) => panels[index].id === flexible ? 'after' : 'before';
+
+    /* What has to stay on the other side of a gutter: every column there, the
+       gutters among them, with the flexible panel counted at its minimum since
+       that is all it will give up. The columns are measured when a drag begins,
+       because another gutter may have been moved since the page was laid out */
 
     const reserve = (index) => () => {
         let columns = getComputedStyle(document.body).gridTemplateColumns
             .split(' ').map(parseFloat);
 
-        let behind = columns.slice(index * 2 + 1, -1);
+        /* Where this gutter sits in that list, and which columns are on the
+           other side of it, itself included */
 
-        return behind.reduce((total, size) => total + (size || 0), 0) + MINIMUM;
+        let gutter = index * 2 + 1;
+        let first = side(index) === 'after' ? 0 : gutter;
+        let others = side(index) === 'after' ? columns.slice(0, gutter + 1) : columns.slice(gutter);
+
+        let flexibleColumn = panels.findIndex((panel) => panel.id === flexible) * 2;
+
+        return others.reduce((total, size, offset) =>
+            total + (first + offset === flexibleColumn ? MINIMUM : (size || 0)), 0);
     }
 
-    /* And where a pane goes back to when its gutter is double clicked, which is
-       an equal share of the window for every panel that is shown */
+    /* And how wide a panel is when nothing was kept and when its gutter is
+       double clicked, which is the width it was given */
 
-    const initial = () => window.innerWidth / panels.length;
+    const initial = (index) => () => SIZES[dragged(index).id].width;
 
     $effect(() => {
         document.body.style.gridTemplateColumns = template;
@@ -580,13 +609,15 @@
 
         {#if index < panels.length - 1}
             <Split
-                name="inspector-{panel.id}"
+                name="inspector-{dragged(index).id}"
+                side={side(index)}
                 column={index * 2 + 2}
                 row={3}
                 minimum={MINIMUM}
+                maximum={SIZES[dragged(index).id].maximum}
                 reserve={reserve(index)}
-                {initial}
-                label="Resize the {panel.label.toLowerCase()} panel"
+                initial={initial(index)}
+                label="Resize the {dragged(index).label.toLowerCase()} panel"
                 background={panels[index + 1].id === 'rendered' ? 'var(--paper)' : 'var(--pane)'}
             />
         {/if}

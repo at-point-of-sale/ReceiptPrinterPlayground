@@ -16,17 +16,29 @@
         row and column it sits in; the playground, which has one, takes the
         defaults.
 
-        What is dragged is the width of the pane in front of the gutter, which
-        is measured from the left edge of that pane rather than from the edge of
-        the page: on a page where the gutter is the first one the two are the
-        same, and on a page with a gutter further along it is the second one
-        that means anything. The pane in front is the element before this one,
-        which is where the origin comes from.
+        What is dragged is the width of one of the two panes beside the gutter,
+        and which of the two is what `side` says.
+
+        A gutter on the `before` side, which is what a page that says nothing
+        gets, drags the pane in front of it, measured from the left edge of that
+        pane rather than from the edge of the page: on a page where the gutter is
+        the first one the two are the same, and on a page with a gutter further
+        along it is the second one that means anything.
+
+        A gutter on the `after` side drags the pane behind it instead, measured
+        from the right edge of that pane, which is the far side of the pane and
+        stays put while the gutter moves. Dragging such a gutter to the left
+        makes its pane wider, and the arrow keys follow the gutter rather than
+        the pane: left widens it and right narrows it.
+
+        Either way the pane it drags is an element beside this one, the one
+        before it or the one after it, which is where the origin comes from.
     */
 
     /**
      * @prop {Function} onresize - Called while the split moves, for whatever has to be told
      * @prop {string} name - The name of the variable that is dragged, and the key it is kept under
+     * @prop {string} side - Which pane the gutter drags, `before` it or `after` it
      * @prop {number} column - The column of the grid the gutter sits in
      * @prop {number} row - The row of the grid the gutter sits in
      * @prop {string} label - What the gutter is called, for whoever cannot see it
@@ -35,6 +47,9 @@
      *                          than. The default is the minimum the grid of the
      *                          playground clamps its columns to, and a page that
      *                          gives another has to give its grid the same one
+     * @prop {?number} maximum - What the pane it drags is never wider than, on
+     *                          top of the room there is for it. A page that
+     *                          leaves it out has a pane that takes what it can
      * @prop {?number|Function} reserve - The room that has to stay behind the
      *                          gutter, or a function that is asked for it. A
      *                          page with one gutter leaves it out and the room
@@ -46,11 +61,13 @@
     let {
         onresize = null,
         name = 'split',
+        side = 'before',
         column = 2,
         row = 3,
         label = 'Resize the editor',
         background = '#fafafa',
         minimum = 240,
+        maximum = null,
         reserve = null,
         initial = null,
     } = $props();
@@ -64,17 +81,30 @@
 
     let width = $state(0);
 
-    /* Where the pane in front of the gutter begins, which is what its width is
-       measured from. The first gutter of a page sits against the edge and the
-       origin is nought; a gutter further along starts where the pane before it
-       does */
+    /* Which way this gutter works: the pane in front of it, or the pane behind
+       it */
 
-    const origin = () => element?.previousElementSibling?.getBoundingClientRect().left || 0;
+    let after = $derived(side === 'after');
 
-    /* What has to stay behind the gutter. A page with one gutter keeps the
-       gutter and the pane behind it; a page with more says so itself, and says
-       it as a function when the answer depends on where its other gutters have
-       got to */
+    /* Where the pane the gutter drags is measured from: the left edge of the
+       pane in front of it, or the far edge of the pane behind it. The first
+       gutter of a page sits against the edge and the origin is nought; a gutter
+       further along starts where the pane before it does */
+
+    const origin = () => {
+        if (after) {
+            let behind = element?.nextElementSibling?.getBoundingClientRect().right;
+
+            return behind === undefined ? window.innerWidth : behind;
+        }
+
+        return element?.previousElementSibling?.getBoundingClientRect().left || 0;
+    }
+
+    /* What has to stay on the other side of the gutter. A page with one gutter
+       keeps the gutter and the pane behind it; a page with more says so itself,
+       and says it as a function when the answer depends on where its other
+       gutters have got to */
 
     const room = () => {
         if (reserve === null || reserve === undefined) {
@@ -84,16 +114,24 @@
         return typeof reserve === 'function' ? reserve() : reserve;
     }
 
-    /* The room the pane in front of the gutter has, which is what is left of
-       the window behind its own edge, less everything behind the gutter */
+    /* The room the pane the gutter drags has: what is left of the window on its
+       side of the origin, less everything that has to stay on the other side,
+       and never more than the page allows it */
+
+    const span = (from) => after ? from - room() : window.innerWidth - from - room();
 
     const limit = (value, from = origin()) => Math.max(minimum,
-        Math.min(value, window.innerWidth - from - room()));
+        Math.min(value, span(from), maximum === null ? Infinity : maximum));
 
-    /* Where the pane in front begins when nothing was kept: half the room on a
-       page with one gutter, and whatever the page says on a page with more */
+    /* How wide the pane is when nothing was kept: half the room on a page with
+       one gutter, and whatever the page says on a page with more */
 
     const begin = () => initial ? initial() : (window.innerWidth - origin()) / 2;
+
+    /* How wide the pane is at this moment, which is the distance between the
+       gutter and the origin, whichever side the pane is on */
+
+    const measure = (edge, from) => after ? from - edge : edge - from;
 
     const apply = (value, remember = true, from = origin()) => {
         width = limit(value, from);
@@ -127,10 +165,12 @@
             apply(parseFloat(stored), false);
         }
         else {
-            /* Half the room, which is what the grid does on its own until
-               something moves the split */
+            /* What the grid gave the pane on its own, until something moves the
+               split */
 
-            width = element ? element.getBoundingClientRect().left - origin() : begin();
+            let box = element?.getBoundingClientRect();
+
+            width = box ? measure(after ? box.right : box.left, origin()) : begin();
         }
 
         /* A window that narrows past the split takes the split with it */
@@ -163,10 +203,11 @@
            gutter does, so where it begins is read once, here */
 
         let box = element.getBoundingClientRect();
+        let edge = after ? box.right : box.left;
 
         start = origin();
-        width = box.left - start;
-        offset = event.clientX - box.left;
+        width = measure(edge, start);
+        offset = event.clientX - edge;
         dragging = true;
 
         element.setPointerCapture(event.pointerId);
@@ -178,7 +219,7 @@
             return;
         }
 
-        apply(event.clientX - offset - start, false, start);
+        apply(measure(event.clientX - offset, start), false, start);
     }
 
     const up = (event) => {
@@ -198,6 +239,10 @@
 
     const reset = () => apply(begin());
 
+    /* The arrow keys move the gutter, so which way a pane grows is the side it
+       is on: a pane in front of the gutter grows to the right, and a pane behind
+       it grows to the left */
+
     const keys = (event) => {
         let step = event.key === 'ArrowLeft' ? -STEP : event.key === 'ArrowRight' ? STEP : 0;
 
@@ -207,7 +252,7 @@
 
         event.preventDefault();
 
-        apply((width || begin()) + step);
+        apply((width || begin()) + (after ? -step : step));
     }
 
 </script>
