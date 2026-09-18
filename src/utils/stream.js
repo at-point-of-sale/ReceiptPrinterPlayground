@@ -50,15 +50,19 @@ const feeds = {
 };
 
 /**
- * The cutter's distance in dots, which is what the renderer takes: the lines a
- * printer feeds before it cuts, at the line spacing of its language
+ * The cutter's distance in dots, which is what the renderer takes. A profile's
+ * feed is one line more than the distance: the cutter sits between two lines
+ * of the paper, so the feed that clears the last line has to reach past it,
+ * and the cut lands a line below where the feed alone would say. Measured on
+ * a printout: with no feed at all the cut falls right under the third line
+ * above the command on a printer that feeds four
  *
- * @param  {number|boolean}   lines      The distance in lines, or false for no cutter
+ * @param  {number|boolean}   lines      The feed in lines, or false for no cutter
  * @param  {?string}          language   The language the stream is read in
  * @return {number}                      The distance in dots, nought for no cutter
  */
-const toDots = (lines, language) => typeof lines === 'number' && lines > 0 ?
-    lines * (spacings[language] || spacings['esc-pos']) : 0;
+const toDots = (lines, language) => typeof lines === 'number' && lines > 1 ?
+    (lines - 1) * (spacings[language] || spacings['esc-pos']) : 0;
 
 /**
  * Build the stream of an encoder
