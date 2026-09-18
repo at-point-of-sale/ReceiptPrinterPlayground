@@ -73,14 +73,15 @@
     const TEAR = 6;
     const TEAR_INSET = 14;
 
-    const NOTCH = 6;
     const NOTCH_INSET = 12;
 
-    /* The white between two pieces of one sheet, which is where a partial cut
-       is drawn: a gap of the sheet's own paper, with the wedge in the middle of
-       it, so that no wedge ever lies over the dots */
+    /* The white between two pieces of one sheet, which is where a partial cut is
+       drawn: a gap of the sheet's own paper that the wedge fills, so that no
+       wedge ever lies over the dots. The blank a receipt has at a cut comes from
+       the job itself now, through the cutter's distance, so the gap is no wider
+       than the shape in it needs */
 
-    const GAP = 12;
+    const GAP = 6;
 
     const RUNS_ON = 48;
 
@@ -102,6 +103,12 @@
        scale the paper is actually drawn at and not at the one it asked for */
 
     let scale = $state(0);
+
+    /* And where the gaps of every sheet ended up, in pixels from the top of the
+       sheet: the wedges are cut out of the paper at those rows, and a row that
+       is measured is a row the dots are certainly not on */
+
+    let placements = $state.raw([]);
 
 
     /* The box of one operation, in the frame of the surface it was laid out on:
@@ -598,7 +605,7 @@
        It is a clip path of the sheet, so the grey of the panel shows through
        every edge of it, the overlay of the selection included. */
 
-    const shape = (sheet) => {
+    const shape = (sheet, index) => {
         /* A strip that was torn off by hand, from a printer with no cutter, has
            a row of teeth at either end and nothing else: no tear of a cut, and
            no notch, since a cut this printer never made left no edge */
@@ -631,13 +638,13 @@
            dots: it is deepest at the left edge and closes to a point short of
            the right, where the sliver of paper holds the sheet together */
 
-        let list = [...gaps(sheet)].sort((a, b) => b - a);
+        let list = [...gaps(sheet, index)].sort((a, b) => b - a);
 
         for (let middle of list) {
             points.push(
-                `0 ${round(middle + NOTCH / 2)}px`,
+                `0 ${round(middle + GAP / 2)}px`,
                 `calc(100% - ${NOTCH_INSET}px) ${round(middle)}px`,
-                `0 ${round(middle - NOTCH / 2)}px`,
+                `0 ${round(middle - GAP / 2)}px`,
             );
         }
 
@@ -647,9 +654,17 @@
     /* Where the gaps of a sheet are, in pixels from its top edge: the panels
        above a gap, at the height they are drawn at, and the gaps between them */
 
-    const gaps = (sheet) => {
+    const gaps = (sheet, index) => {
+        /* Where the page put them, once it has been laid out */
+
+        if (placements[index]?.length) {
+            return placements[index];
+        }
+
+        /* And where they will be, until then */
+
         let found = [];
-        let top = GAP;
+        let top = TEAR;
 
         for (let i = 0; i < sheet.panels.length - 1; i++) {
             top += sheet.panels[i].image.height * factor(sheet);
@@ -699,16 +714,15 @@
 
     const round = (value) => Math.round(value * 100) / 100;
 
-    /* The white a sheet carries above and below its dots: an edge that is a cut
-       carries the same room a partial cut leaves between two pieces, with the
-       rise of its tear inside that room, so that paper cut at either end and
-       paper gapped in the middle read alike. A strip torn off by hand carries
-       the room its teeth need, and the last sheet of a stream that was never cut
-       the paper it runs on for before it fades away */
+    /* The white a sheet carries above and below its dots, which is the room its
+       edges need and no more: the rise of the tear at either cut, the teeth of a
+       strip torn off by hand, and under the last sheet of a stream that was
+       never cut the paper it runs on for before it fades away. The blank a
+       receipt has at a cut is the job's own, and comes with the dots */
 
     const padding = (sheet, last) => sheet.torn ?
         `${BITE}px ${SIDE}px ${BITE}px` :
-        `${GAP}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : GAP}px`;
+        `${TEAR}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : TEAR}px`;
 
     /* A strip that was torn off ends where it was torn, so it never runs on */
 
@@ -751,14 +765,30 @@
         const measured = () => {
             let canvas = element.querySelector('.dots canvas');
 
-            if (!canvas || !canvas.width) {
-                return;
+            if (canvas && canvas.width) {
+                let next = canvas.getBoundingClientRect().width / canvas.width;
+
+                if (next && Math.abs(next - scale) > 0.0001) {
+                    scale = next;
+                }
             }
 
-            let next = canvas.getBoundingClientRect().width / canvas.width;
+            /* And the middle of every gap, read off the page rather than worked
+               out: the rows of a sheet are laid out in fractions of a pixel, and
+               a wedge that is a hundredth of one out would touch the dots */
 
-            if (next && Math.abs(next - scale) > 0.0001) {
-                scale = next;
+            let found = [...element.querySelectorAll('.sheet')].map((sheet) => {
+                let top = sheet.getBoundingClientRect().top;
+
+                return [...sheet.querySelectorAll('.gap')].map((gap) => {
+                    let box = gap.getBoundingClientRect();
+
+                    return (box.top + box.bottom) / 2 - top;
+                });
+            });
+
+            if (JSON.stringify(found) !== JSON.stringify(placements)) {
+                placements = found;
             }
         };
 
@@ -849,7 +879,7 @@
                 <div
                     class="sheet"
                     class:running={running(sheet, index === sheets.length - 1)}
-                    style="clip-path: {shape(sheet)}; padding: {padding(sheet, index === sheets.length - 1)};"
+                    style="clip-path: {shape(sheet, index)}; padding: {padding(sheet, index === sheets.length - 1)};"
                 >
                     {#each sheet.panels as panel, which}
                         {#if which > 0}
@@ -908,10 +938,11 @@
         cursor: pointer;
     }
 
-    /* The white between two pieces of one sheet, which a partial cut left */
+    /* The white between two pieces of one sheet, which a partial cut left: the
+       GAP of the script, which the wedge of the clip path fills */
 
     .gap {
-        height: 12px;
+        height: 6px;
     }
 
     /* The canvas and the overlay over it are one thing of the same size, which
