@@ -2,7 +2,7 @@
 
     import ReceiptPrinterRenderer, { rasterize, stitch, pieces, toImageData } from '@point-of-sale/receipt-printer-renderer';
 
-    import { toDots, familyFeed } from '../../utils/stream.js';
+    import { toDots, tearBar } from '../../utils/stream.js';
 
     /*
         The paper, as the printer would print it.
@@ -271,12 +271,12 @@
                prints that far below the cut edge and the paper is cut that far
                above the row the command was given at: the blank the encoder fed
                in front of its cut is the top of the next piece. A printer with
-               no cutter has a tear bar in the same place, so the same shift
-               applies to it, at the distance its family usually has; a printer
-               that feeds nothing moves nothing */
+               no cutter has a tear bar above its head as well, closer than a
+               cutter's blade, so the same shift applies to it at that distance;
+               a printer that feeds nothing moves nothing */
 
             let cutter = stream.cutter !== false;
-            let distance = toDots(cutter ? stream.cutter : familyFeed(language), language);
+            let distance = cutter ? toDots(stream.cutter, language) : tearBar(language);
 
             let renderer = new ReceiptPrinterRenderer(Object.assign({
                 language,

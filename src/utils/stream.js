@@ -55,13 +55,28 @@ const feeds = {
 
 /**
  * The feed a printer of a language has when it names none of its own, in lines:
- * the feed of a generic printer, and the tear bar of a printer that has no
- * cutter, which sits where a cutter would
+ * the feed of a generic printer
  *
  * @param  {?string}   language   The language the stream is read in
- * @return {number}               The distance in lines
+ * @return {number}               The feed in lines
  */
 const familyFeed = (language) => feeds[language] || feeds['esc-pos'];
+
+/* The tear bar of a printer that has no cutter sits this many lines above the
+   print head, closer than a cutter's blade: measured on a TM-P20II and an
+   SM-L200, where a job that ends on its last line and is torn off leaves that
+   line inside the printer and nothing more. A profile field for the tear bar
+   would give it per printer */
+
+const TEAR_BAR = 1;
+
+/**
+ * The tear bar's distance in dots, for a printer that has no cutter
+ *
+ * @param  {?string}   language   The language the stream is read in
+ * @return {number}               The distance in dots
+ */
+const tearBar = (language) => TEAR_BAR * (spacings[language] || spacings['esc-pos']);
 
 /**
  * The cutter's distance in dots, which is what the renderer takes. A profile's
@@ -207,4 +222,4 @@ const toModel = (id, language) => {
     };
 }
 
-export { toStream, toModel, toDots, familyFeed, modelsFor, GENERICS, DEFAULT_MODEL };
+export { toStream, toModel, toDots, tearBar, modelsFor, GENERICS, DEFAULT_MODEL };
