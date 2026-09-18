@@ -24,8 +24,8 @@
     "@point-of-sale/webbluetooth-receipt-printer": "^2.1.0",
     "bcbp": "^6.0.2",
     "verhoeff": "^0.0.5",
-    "@point-of-sale/receipt-printer-renderer": "^1.0.0",
-    "@point-of-sale/receipt-printer-decoder": "^1.0.0",
+    "@point-of-sale/receipt-printer-renderer": "^1.1.0",
+    "@point-of-sale/receipt-printer-decoder": "^1.1.0",
     "@point-of-sale/receiptline": "^0.1.0"
   }
 }

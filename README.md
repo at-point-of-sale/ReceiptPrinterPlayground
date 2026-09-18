@@ -16,7 +16,7 @@ The app is a Cloudflare Worker that serves the built files as static assets; `wr
 npm run deploy
 ```
 
-This builds the app and deploys it. Pushes to `main` deploy automatically once the repository is connected to the Worker in the Cloudflare dashboard, with `npm run deploy` as the deploy command. That waits for its dependencies to be on npm: the encoder at 4.0.0, the renderer and receiptline are installed through `npm link` today, which a build on Cloudflare cannot do, so until then it deploys from a machine that has the checkouts.
+This builds the app and deploys it. Pushes to `main` deploy automatically once the repository is connected to the Worker in the Cloudflare dashboard, with `npm run deploy` as the deploy command. Every dependency is on npm, so a build on Cloudflare installs and builds the app as a machine with the checkouts does; `npm run link` puts the local checkouts of the libraries back for development.
 
 
 
