@@ -57,12 +57,15 @@
     const CUT = 2;
 
     /* The shape of a piece of paper, in pixels of the screen and not in dots of
-       the printer: the white around the dots, how high the tear at the right of
+       the printer: the white beside the dots, how high the tear at the right of
        a cut rises and how far from the right edge it begins, the wedge a partial
        cut leaves and where its point stops, and how far a stream that was never
-       cut runs on before it fades away */
+       cut runs on before it fades away.
 
-    const PAD = 32;
+       There is no white above or below the dots: paper begins and ends on the
+       row it was cut on, and the only room an edge takes is the room its own
+       shape needs */
+
     const SIDE = 16;
 
     const TEAR = 6;
@@ -636,7 +639,7 @@
 
     const gaps = (sheet) => {
         let found = [];
-        let top = PAD + TEAR;
+        let top = TEAR;
 
         for (let i = 0; i < sheet.panels.length - 1; i++) {
             top += sheet.panels[i].image.height * factor(sheet);
@@ -686,13 +689,15 @@
 
     const round = (value) => Math.round(value * 100) / 100;
 
-    /* The white a sheet carries around its dots: the room the tear needs above
-       them, and under the last sheet of a stream that was never cut the paper it
-       runs on for before it fades away */
+    /* The white a sheet carries above and below its dots, which is the room its
+       edges need and nothing more: the tear of the cut it begins on, the tear of
+       the cut it ends on, the teeth of a strip that was torn off by hand, and
+       under the last sheet of a stream that was never cut the paper it runs on
+       for before it fades away */
 
     const padding = (sheet, last) => sheet.torn ?
-        `${PAD + BITE}px ${SIDE}px ${PAD + BITE}px` :
-        `${PAD + TEAR}px ${SIDE}px ${PAD + (running(sheet, last) ? RUNS_ON : 0)}px`;
+        `${BITE}px ${SIDE}px ${BITE}px` :
+        `${TEAR}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : TEAR}px`;
 
     /* A strip that was torn off ends where it was torn, so it never runs on */
 
