@@ -26,7 +26,7 @@
 </script>
 
 <Toolbar {view} {onload} />
-<Editor bind:this={editor} {contents} />
+<Editor bind:this={editor} {contents} {model} />
 <!-- The gutter is the colour of the preview behind it, which is the darker
      grey of the paper while the rendered view is shown, as in the inspector -->
 <Split onresize={() => editor?.resize()} background={$view === 'image' ? '#e4e4e4' : '#fafafa'} />
