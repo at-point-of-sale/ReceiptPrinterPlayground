@@ -241,8 +241,6 @@
         z-index: 100;
         overflow: visible;
 
-        anchor-name: var(--menu);
-
         opacity: 1;
         transition:
             opacity 0.15s ease-out,
@@ -261,6 +259,14 @@
     .popover:not(:popover-open) {
         opacity: 0;
         margin-top: -10px;
+    }
+
+    /* The panel is an anchor itself, for the arrow, and only while it is open:
+       Safari hangs when a panel that carries an anchor name closes while its
+       own arrow is pinned to that name */
+
+    .popover:popover-open {
+        anchor-name: var(--menu);
     }
 
     @position-try --popover-top {
