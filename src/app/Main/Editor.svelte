@@ -38,15 +38,7 @@
             load('new');
         }
 
-        window.addEventListener('beforeunload', () => {
-            if (editor) {
-                localStorage.setItem('editor', JSON.stringify({
-                    value:  editor.getValue(),
-                    cursor: editor.selection.getCursor(),
-                    range:  editor.getSelectionRange()
-                }));
-            }
-        });
+        window.addEventListener('beforeunload', save);
 
         /* Ace carries drag and drop of its own, for the text in it, and it
            listens on this same element. These listen in front of it, in the
@@ -57,13 +49,53 @@
         container.addEventListener('dragleave', dragleave, true);
         container.addEventListener('drop', dropped, true);
 
+        /* A drag that ends anywhere else is a drag that is over as far as the
+           editor is concerned: dropped on another pane, let go halfway, or
+           taken out of the window, which is the leave with nothing on the
+           other side of it */
+
+        window.addEventListener('dragend', over);
+        window.addEventListener('drop', over);
+        window.addEventListener('dragleave', left);
+
         return () => {
             container.removeEventListener('dragenter', dragenter, true);
             container.removeEventListener('dragover', dragover, true);
             container.removeEventListener('dragleave', dragleave, true);
             container.removeEventListener('drop', dropped, true);
+
+            window.removeEventListener('beforeunload', save);
+            window.removeEventListener('dragend', over);
+            window.removeEventListener('drop', over);
+            window.removeEventListener('dragleave', left);
         };
     });
+
+    /* What is in the editor, kept for the next time the page is opened.
+
+       A script with photographs in it can be larger than the browser is willing
+       to keep, and then nothing is kept at all: this says so rather than
+       throwing, which would take the rest of the unloading with it and leave
+       yesterday's script to come back in its place without a word */
+
+    function save() {
+        if (!editor) {
+            return true;
+        }
+
+        try {
+            localStorage.setItem('editor', JSON.stringify({
+                value:  editor.getValue(),
+                cursor: editor.selection.getCursor(),
+                range:  editor.getSelectionRange()
+            }));
+
+            return true;
+        }
+        catch (error) {
+            return false;
+        }
+    }
 
     setInterval(() => {
         if (dirty) {
@@ -144,11 +176,35 @@
     */
 
     let dragging = $state(false);
+    let trouble = $state(null);
 
     /* A drag that moves over the editor enters and leaves every element under
        it, so what is counted is how deep it is rather than whether it is here */
 
     let depth = 0;
+
+    /* A canvas of more rows than this is one no browser will draw, and a
+       receipt of two metres is not one anybody meant to print */
+
+    const ROWS = 16384;
+
+    /* How long what went wrong stays up */
+
+    const SHOWN = 5000;
+
+    let timer = null;
+
+    function warn(message) {
+        trouble = message;
+
+        clearTimeout(timer);
+        timer = setTimeout(() => { trouble = null; }, SHOWN);
+    }
+
+    function dismiss() {
+        clearTimeout(timer);
+        trouble = null;
+    }
 
     /* The image types the browser can draw, which is what can be dropped. A
        drag carrying anything else is somebody else's */
@@ -212,6 +268,22 @@
         }
     }
 
+    /* The drag is over, wherever it ended */
+
+    function over() {
+        depth = 0;
+        dragging = false;
+    }
+
+    /* A leave with nothing on the other side of it is a drag that left the
+       window */
+
+    function left(event) {
+        if (event.relatedTarget === null) {
+            over();
+        }
+    }
+
     /* The width of the paper of the selected model, which is what an image is
        never printed wider than. A model that was not selected is the generic
        printer, and whatever the encoder gives for it */
@@ -223,8 +295,6 @@
             return encoder.printableWidth;
         }
         catch (error) {
-            console.warn(error);
-
             return 384;
         }
     }
@@ -243,64 +313,114 @@
 
     /* The image at the size it is printed at, as a PNG. The canvas is white
        before the image is drawn on it, because a printer that cannot print
-       white prints the paper, and the paper is white */
+       white prints the paper, and the paper is white.
+
+       A canvas larger than the browser is prepared to make hands back a data
+       URL of `data:,`, which is not an image and not something to put in a
+       script, so what comes out is looked at rather than trusted */
 
     function render(image, size) {
-        let canvas = document.createElement('canvas');
+        try {
+            let canvas = document.createElement('canvas');
 
-        canvas.width = size.width;
-        canvas.height = size.height;
+            canvas.width = size.width;
+            canvas.height = size.height;
 
-        let context = canvas.getContext('2d');
+            let context = canvas.getContext('2d');
 
-        context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, size.width, size.height);
-        context.drawImage(image, 0, 0, size.width, size.height);
+            if (!context || canvas.width !== size.width || canvas.height !== size.height) {
+                return null;
+            }
 
-        return canvas.toDataURL('image/png');
+            context.fillStyle = '#ffffff';
+            context.fillRect(0, 0, size.width, size.height);
+            context.drawImage(image, 0, 0, size.width, size.height);
+
+            let url = canvas.toDataURL('image/png');
+
+            return url.startsWith('data:image/png;base64,') ? url : null;
+        }
+        catch (error) {
+            return null;
+        }
     }
+
+    /* The code for one file, or what was the matter with it */
 
     async function code(file, script) {
-        let source = await read(file);
-
         let image = new Image();
-        image.src = source;
 
-        await image.decode();
+        try {
+            image.src = await read(file);
 
-        /* An SVG that carries no width and height of its own is drawn at the
-           width of the paper, and its viewBox says what shape it is. The
-           browser reports a size for such an SVG all the same, one it made up
-           out of a default of 300 by 150, so the file itself is asked */
+            await image.decode();
+        }
+        catch (error) {
+            /* A file the browser will not draw: a HEIC out of a telephone, a
+               TIFF, or a PNG that is one in name only */
 
-        let intrinsic = image.naturalWidth > 0 && image.naturalHeight > 0;
-
-        let natural = { width: image.naturalWidth, height: image.naturalHeight };
-
-        if (file.type === 'image/svg+xml') {
-            let declared = svgSize(await file.text());
-
-            intrinsic = declared ? declared.intrinsic : false;
-
-            if (declared) {
-                natural = { width: declared.width, height: declared.height };
-            }
+            return { trouble: `${file.name} could not be read as an image` };
         }
 
-        let size = printedSize(natural.width, natural.height, printableWidth(), intrinsic);
+        try {
+            /* An SVG that carries no width and height of its own is drawn at
+               the width of the paper, and its viewBox says what shape it is.
+               The browser reports a size for such an SVG all the same, one it
+               made up out of a default of 300 by 150, so the file itself is
+               asked */
 
-        return snippet(identifier(file.name, script), render(image, size), size);
+            let intrinsic = image.naturalWidth > 0 && image.naturalHeight > 0;
+
+            let natural = { width: image.naturalWidth, height: image.naturalHeight };
+
+            if (file.type === 'image/svg+xml') {
+                let declared = svgSize(await file.text());
+
+                intrinsic = declared ? declared.intrinsic : false;
+
+                if (declared) {
+                    natural = { width: declared.width, height: declared.height };
+                }
+            }
+
+            let size = printedSize(natural.width, natural.height, printableWidth(), intrinsic);
+
+            if (size.height > ROWS) {
+                return { trouble: `${file.name} is too tall to print as one image` };
+            }
+
+            let url = render(image, size);
+
+            if (!url) {
+                return { trouble: `${file.name} could not be drawn at ${size.width} by ${size.height}` };
+            }
+
+            return { text: snippet(identifier(file.name, script), url, size) };
+        }
+        catch (error) {
+            return { trouble: `${file.name} could not be read as an image` };
+        }
     }
 
-    async function dropped(event) {
+    /* One drop at a time. A drop reads the script and works out its names when
+       its turn comes, and not while another drop is still busy putting its own
+       code in */
+
+    let queue = Promise.resolve();
+
+    function dropped(event) {
+        /* Whatever comes of it, the drag is over */
+
+        over();
+
         if (!images(event.dataTransfer)) {
             return;
         }
 
         take(event);
 
-        depth = 0;
-        dragging = false;
+        /* The files are read now: what the drag carries is gone the moment this
+           returns */
 
         let files = Array.from(event.dataTransfer.files || [])
             .filter(file => file.type.startsWith('image/'));
@@ -309,47 +429,133 @@
             return;
         }
 
-        /* The line under the pointer, which is where the code goes in, in front
-           of whatever is on it */
-
-        let row = Math.min(
+        let point = place(Math.min(
             editor.renderer.screenToTextCoordinates(event.clientX, event.clientY).row,
-            editor.session.getLength() - 1);
+            editor.session.getLength() - 1));
 
-        let script = editor.getValue();
+        /* An anchor moves along with everything typed or dropped in front of
+           it, so a drop that has to wait for the one before it still lands
+           where it was dropped */
+
+        let anchor = editor.session.doc.createAnchor(point.row, point.column);
+
+        queue = queue
+            .then(() => insert(files, anchor, point.prefix))
+            .catch(() => warn('The image could not be added to the script'));
+    }
+
+    /* Where the code goes in: the start of the line under the pointer, unless
+       that line is inside a comment, which the code would cut in half. The rows
+       of the comment are passed over, and a script that is comment all the way
+       down gets the code on a line of its own behind it */
+
+    function place(row) {
+        let session = editor.session;
+        let length = session.getLength();
+
+        /* Ace reads a row against the state the row in front of it ended in, so
+           the rows in front are read first: without them the comment that
+           started on one of them is not there */
+
+        for (let scan = 0; scan <= row; scan++) {
+            session.getTokens(scan);
+        }
+
+        let comment = (scan) => {
+            session.getTokens(scan);
+
+            /* The state a row begins in, which is what tells a blank line
+               inside a comment from a blank line outside one */
+
+            if (scan > 0 && String(session.getState(scan - 1)).includes('comment')) {
+                return true;
+            }
+
+            let token = session.getTokenAt(scan, 0);
+
+            return !!token && String(token.type).includes('comment');
+        };
+
+        let target = row;
+
+        while (target < length && comment(target)) {
+            target++;
+        }
+
+        if (target < length) {
+            return { row: target, column: 0, prefix: '' };
+        }
+
+        return {
+            row: length - 1,
+            column: session.getLine(length - 1).length,
+            prefix: '\n'
+        };
+    }
+
+    async function insert(files, anchor, prefix) {
+        let troubles = [];
         let text = '';
 
-        for (let file of files) {
-            try {
-                /* Every snippet declares its name, so a second file of the same
-                   name is unique against the first one of this very drop */
+        try {
+            /* The script as it stands at this moment, which is what the names
+               are made unique against: a drop that waited for another one
+               waited for its names as well */
 
-                text += await code(file, script + text);
+            let script = editor.getValue();
+
+            for (let file of files) {
+                let result = await code(file, script + text);
+
+                if (result.trouble) {
+                    troubles.push(result.trouble);
+                }
+                else {
+                    text += result.text;
+                }
             }
-            catch (error) {
-                console.warn(error);
+
+            if (text !== '') {
+                /* One insert is one edit, and one edit is what a single undo
+                   takes back */
+
+                let end = editor.session.insert(anchor.getPosition(), prefix + text);
+
+                editor.selection.moveCursorToPosition(end);
+                editor.selection.clearSelection();
+                editor.focus();
+
+                update();
+
+                /* A script with photographs in it can outgrow what the browser
+                   keeps, and the moment to say so is now, rather than when the
+                   page is closed and the script is gone */
+
+                if (!save()) {
+                    troubles.push('This script is too large to be kept when the page is closed');
+                }
             }
         }
-
-        if (text === '') {
-            return;
+        finally {
+            anchor.detach();
         }
 
-        /* One insert is one edit, and one edit is what a single undo takes back */
-
-        editor.session.insert({ row, column: 0 }, text);
-
-        editor.selection.moveCursorToPosition({ row: row + text.split('\n').length - 1, column: 0 });
-        editor.selection.clearSelection();
-        editor.focus();
-
-        update();
+        if (troubles.length) {
+            warn(troubles.join('\n'));
+        }
     }
 
 
 </script>
 
 <div id="editor" class:dragging bind:this={container}></div>
+
+<!-- What was the matter with a dropped image, at the foot of the editor, which
+     goes away on its own or when it is clicked -->
+
+{#if trouble}
+    <button class="trouble" type="button" onclick={dismiss}>{trouble}</button>
+{/if}
 
 <style>
 
@@ -378,6 +584,38 @@
         border: 2px solid #2196F3;
         pointer-events: none;
         z-index: 20;
+    }
+
+    /* The amber of the trouble the inspector shows, in a note that sits over
+       the foot of the editor rather than in a row of its own, because the
+       editor is one pane of a page that has no room for another row */
+
+    .trouble {
+        grid-row: 3;
+        grid-column: 1;
+        align-self: end;
+        justify-self: center;
+        z-index: 30;
+
+        box-sizing: border-box;
+        max-width: calc(100% - 32px);
+        margin: 0 0 16px 0;
+        padding: 8px 15px;
+        border: 1px solid #ffe69c;
+        border-radius: 6px;
+
+        background: #fff3cd;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+
+        appearance: none;
+        font-family: system-ui;
+        font-size: 9pt;
+        font-weight: normal;
+        color: #664d03;
+        text-align: left;
+        white-space: pre-line;
+
+        cursor: pointer;
     }
 
 </style>

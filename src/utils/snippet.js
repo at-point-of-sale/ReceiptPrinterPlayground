@@ -57,28 +57,57 @@ export function printedSize(naturalWidth, naturalHeight, printableWidth, intrins
 }
 
 
-/* The words a variable cannot be called, which are the reserved words of the
-   language and the one name the snippet leans on: a `const encoder` would hide
-   the encoder the script prints with */
+/* The words a variable cannot be called: the reserved words of the language,
+   the names strict code keeps to itself, and the one name the snippet leans on,
+   because a `const encoder` would hide the encoder the script prints with */
 
 const RESERVED = new Set([
-    'await', 'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger',
-    'default', 'delete', 'do', 'else', 'enum', 'export', 'extends', 'false',
-    'finally', 'for', 'function', 'if', 'implements', 'import', 'in',
-    'instanceof', 'interface', 'let', 'new', 'null', 'package', 'private',
-    'protected', 'public', 'return', 'static', 'super', 'switch', 'this',
-    'throw', 'true', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
-    'encoder'
+    'arguments', 'await', 'break', 'case', 'catch', 'class', 'const',
+    'continue', 'debugger', 'default', 'delete', 'do', 'else', 'enum', 'eval',
+    'export', 'extends', 'false', 'finally', 'for', 'function', 'if',
+    'implements', 'import', 'in', 'instanceof', 'interface', 'let', 'new',
+    'null', 'package', 'private', 'protected', 'public', 'return', 'static',
+    'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void',
+    'while', 'with', 'yield',
+    'Infinity', 'NaN', 'undefined', 'encoder'
 ]);
+
+
+/* The letters that carry no accent to take off, and what they are written as
+   in the twenty-six letters everybody has */
+
+const TRANSLITERATION = {
+    'ß': 'ss', 'æ': 'ae', 'Æ': 'Ae', 'œ': 'oe', 'Œ': 'Oe', 'ø': 'o', 'Ø': 'O',
+    'đ': 'd', 'Đ': 'D', 'ð': 'd', 'Ð': 'D', 'þ': 'th', 'Þ': 'Th', 'ł': 'l',
+    'Ł': 'L', 'ı': 'i', 'İ': 'I', 'ŉ': 'n', 'ſ': 's'
+};
+
+
+/* A name in plain letters. What carries an accent is taken apart and the accent
+   dropped, `café` becoming `cafe`, what has no accent to drop is written out,
+   `Größe` becoming `Grosse`, and whatever is left that is not a letter or a
+   digit of the plain alphabet is nothing a variable can be named after */
+
+function ascii(text) {
+    return text
+        .replace(/[ßæÆœŒøØđĐðÐþÞłŁıİŉſ]/g, character => TRANSLITERATION[character])
+        .normalize('NFD')
+        .replace(/\p{M}+/gu, '');
+}
 
 
 /**
  * The name of the variable an image goes into, from the name of the file.
  *
- * The extension goes, what is left is cut at everything that is not a letter or
- * a digit and the pieces are joined up as one word: `Shop Logo-2.png` is
- * `shopLogo2`. A name that would start with a digit, that would be a word of
- * the language, or that would be nothing at all, is prefixed with `image`.
+ * The extension goes, what is left is written in plain letters and cut at
+ * everything that is not one of them or a digit, and the pieces are joined up
+ * as one word: `Shop Logo-2.png` is `shopLogo2` and `café.png` is `cafe`. A
+ * name that would start with a digit, that would be a word of the language, or
+ * that would be nothing at all, is prefixed with `image`.
+ *
+ * What comes out is always a letter followed by letters and digits, which is a
+ * name JavaScript takes and a name a search can look for without having to
+ * think about what a word boundary is in a language it has never heard of.
  *
  * @param {string} fileName - The name of the dropped file
  * @returns {string} The name, before it is made unique
@@ -95,11 +124,9 @@ export function identifierFor(fileName) {
         stem = stem.slice(0, dot);
     }
 
-    /* Anything that is not a letter or a digit cuts the name in two, letters
-       and digits of any language among them, which a variable may be named
-       after as much as the plain ones */
+    /* Anything that is not a plain letter or digit cuts the name in two */
 
-    let parts = stem.split(/[^\p{L}\p{N}]+/u).filter(part => part.length > 0);
+    let parts = ascii(stem).split(/[^A-Za-z0-9]+/).filter(part => part.length > 0);
 
     let name = parts.map((part, index) => {
         /* A piece that shouts, `IMG`, is read as a word rather than as
@@ -112,7 +139,7 @@ export function identifierFor(fileName) {
             : word.charAt(0).toUpperCase() + word.slice(1);
     }).join('');
 
-    if (name === '' || /^\p{N}/u.test(name) || RESERVED.has(name)) {
+    if (!/^[A-Za-z][A-Za-z0-9]*$/.test(name) || RESERVED.has(name)) {
         name = 'image' + name.charAt(0).toUpperCase() + name.slice(1);
     }
 
@@ -121,17 +148,22 @@ export function identifierFor(fileName) {
 
 
 /**
- * Whether a script already declares a name.
+ * Whether a script already has a name.
  *
- * Only declarations count: a `const`, a `let` or a `var` of that name. A name
- * that is merely used somewhere is no reason to pick another.
+ * A name counts as taken wherever it stands in the script as a word of its own,
+ * in a comment or a string as much as in the code. Looking for the declaration
+ * instead would be looking for all the shapes a declaration comes in, a
+ * `function`, a `class`, an `import`, a second name behind a comma, a name
+ * taken out of an object, and a name that is missed is a name declared twice.
+ * A name that is found where it does not count costs a 2 behind it, which costs
+ * nobody anything.
  *
  * @param {string} script - The text in the editor
  * @param {string} name - The name to look for
- * @returns {boolean} Whether the script declares it
+ * @returns {boolean} Whether the script has it
  */
-export function declares(script, name) {
-    let pattern = new RegExp(`(?:^|[^.\\w$])(?:const|let|var)\\s+${name}\\b`);
+export function taken(script, name) {
+    let pattern = new RegExp(`(?<![A-Za-z0-9_$])${name}(?![A-Za-z0-9_$])`);
 
     return pattern.test(String(script ?? ''));
 }
@@ -140,8 +172,8 @@ export function declares(script, name) {
 /**
  * The name of the variable an image goes into, made unique against the script.
  *
- * A name the script already declares gets a 2 behind it, and if that is taken
- * as well a 3, and so on.
+ * A name the script already has gets a 2 behind it, and if that is taken as
+ * well a 3, and so on.
  *
  * @param {string} fileName - The name of the dropped file
  * @param {string} script - The text in the editor, plus whatever is about to go into it
@@ -150,13 +182,13 @@ export function declares(script, name) {
 export function identifier(fileName, script = '') {
     let name = identifierFor(fileName);
 
-    if (!declares(script, name)) {
+    if (!taken(script, name)) {
         return name;
     }
 
     let counter = 2;
 
-    while (declares(script, name + counter)) {
+    while (taken(script, name + counter)) {
         counter++;
     }
 
