@@ -2,6 +2,8 @@
 
     import ReceiptPrinterRenderer, { rasterize, stitch, pieces, toImageData } from '@point-of-sale/receipt-printer-renderer';
 
+    import { toDots } from '../../utils/stream.js';
+
     /*
         The paper, as the printer would print it.
 
@@ -258,12 +260,20 @@
 
             let width = stream.width;
 
-            let renderer = new ReceiptPrinterRenderer({
+            /* The cutter of a printer sits above its print head, so a job
+               prints that far below the cut edge and the paper is cut that far
+               above the row the command was given at: the blank the encoder fed
+               in front of its cut is the top of the next piece. A printer with
+               no cutter, and one that feeds nothing, move nothing */
+
+            let distance = toDots(stream.cutter, language);
+
+            let renderer = new ReceiptPrinterRenderer(Object.assign({
                 language,
                 width,
                 codepageMapping: stream.codepageMapping,
                 commands: [ 'cut', 'pulse', 'feed' ],
-            });
+            }, distance ? { cutterDistance: distance } : {}));
 
             /* The list first, because it says what was drawn and where; the dots
                are that same list rasterized, so the two agree by construction.

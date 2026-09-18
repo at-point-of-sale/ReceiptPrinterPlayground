@@ -6,7 +6,7 @@
 
     import ReceiptPrinterRenderer, { stitch, toPng } from '@point-of-sale/receipt-printer-renderer';
 
-    import { toModel, modelsFor, GENERICS, DEFAULT_MODEL } from './utils/stream.js';
+    import { toModel, toDots, modelsFor, GENERICS, DEFAULT_MODEL } from './utils/stream.js';
     import { connect, disconnect } from './utils/printer.js';
     import { ranges, at } from './utils/tokens.js';
 
@@ -400,12 +400,18 @@
                 throw new Error(`Cannot render ${language} commands`);
             }
 
-            let renderer = new ReceiptPrinterRenderer({
+            /* The paper is saved the way the Rendered panel shows it, the
+               cutter's distance included: the blank the printer holds between
+               its cutter and its head is part of the paper */
+
+            let distance = toDots(stream.cutter, language);
+
+            let renderer = new ReceiptPrinterRenderer(Object.assign({
                 language,
                 width,
                 codepageMapping,
                 commands: [ 'cut', 'pulse', 'feed' ],
-            });
+            }, distance ? { cutterDistance: distance } : {}));
 
             if (format === 'png') {
                 /* The paper of the whole roll, with a dashed line where it is

@@ -4,9 +4,11 @@
     this is where an encoder becomes one.
 
     A stream carries `bytes`, the `language` it is read in, the `width` of the
-    paper in dots, the `codepageMapping` it was encoded with, and `cutter`,
-    whether the printer has one: a printer without a cutter ignores the commands
-    that cut, so its paper is one strip that is torn off by hand.
+    paper in dots, the `codepageMapping` it was encoded with, and `cutter`, the
+    distance between the cutter and the print head in lines, or `false` for a
+    printer that has no cutter at all: such a printer ignores the commands that
+    cut, so its paper is one strip that is torn off by hand, and a printer that
+    has one prints its first line that distance below the cut edge.
 */
 
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
@@ -22,6 +24,41 @@ const mappings = {
     'star-line':     'star',
     'star-graphics': 'star',
 };
+
+/* The line spacing a printer of a language uses when a stream sets none, which
+   is what the cutter's distance in lines is counted in. The renderer keeps
+   these in the profiles it renders with, `lineSpacing` of `generated/profiles.js`
+   in that package, 30 dots for the epson profile and 32 for the star one, and
+   it exposes neither, so they are written out here */
+
+const spacings = {
+    'esc-pos':       30,
+    'star-prnt':     32,
+    'star-line':     32,
+    'star-graphics': 32,
+};
+
+/* And how far a printer that names no distance of its own feeds before it cuts,
+   which is what the generic widths are read with: four lines on an ESC/POS
+   printer and three on a Star one, the usual feed of either */
+
+const feeds = {
+    'esc-pos':       4,
+    'star-prnt':     3,
+    'star-line':     3,
+    'star-graphics': 3,
+};
+
+/**
+ * The cutter's distance in dots, which is what the renderer takes: the lines a
+ * printer feeds before it cuts, at the line spacing of its language
+ *
+ * @param  {number|boolean}   lines      The distance in lines, or false for no cutter
+ * @param  {?string}          language   The language the stream is read in
+ * @return {number}                      The distance in dots, nought for no cutter
+ */
+const toDots = (lines, language) => typeof lines === 'number' && lines > 0 ?
+    lines * (spacings[language] || spacings['esc-pos']) : 0;
 
 /**
  * Build the stream of an encoder
@@ -41,28 +78,31 @@ const toStream = (encoder) => {
         language,
         width: encoder.printableWidth,
         codepageMapping: encoder.printerCapabilities?.codepages || mappings[language],
-        cutter: hasCutter(encoder),
+        cutter: cutterOf(encoder),
     };
 }
 
 /**
- * Whether the printer of an encoder has a cutter, which is a printer whose
- * profile says so. A stream that names no printer at all is read as a printer
- * that has one, since a receipt that is cut is what nearly every stream is
- * written for; the encoder tells the two apart by its capabilities, which name
- * a language only when a model was chosen
+ * The cutter of the printer of an encoder: how far it feeds before it cuts, in
+ * lines, or false for a printer whose profile has no cutter.
  *
- * @param  {object}   encoder  The encoder of the printer
- * @return {boolean}           Whether the paper is ever cut
+ * A stream that names no printer is read as a printer with the family's usual
+ * cutter, the same the inspector's generics have: the encoder feeds nothing in
+ * front of a cut then, and the paper shows what that does on such a printer,
+ * which is the point. The encoder tells a model from no model by its
+ * capabilities, which name a language only when a model was chosen
+ *
+ * @param  {object}            encoder  The encoder of the printer
+ * @return {number|boolean}             The distance in lines, or false
  */
-const hasCutter = (encoder) => {
+const cutterOf = (encoder) => {
     let capabilities = encoder.printerCapabilities;
 
     if (!capabilities || !capabilities.language) {
-        return true;
+        return feeds[encoder.language] || feeds['esc-pos'];
     }
 
-    return !!capabilities.cutter;
+    return capabilities.cutter ? (capabilities.cutter.feed || 0) : false;
 }
 
 /**
@@ -119,7 +159,7 @@ const modelsFor = (language) => ReceiptPrinterEncoder.printerModels.filter((prin
 
 /**
  * The settings a model puts behind the bytes: the width of its paper, the
- * codepage mapping it was encoded with and whether it has a cutter. The
+ * codepage mapping it was encoded with and the distance of its cutter. The
  * language is not among them, because
  * the language of a stream is the one that was picked for it and a printer of
  * another language is read in that language all the same.
@@ -135,17 +175,18 @@ const toModel = (id, language) => {
         return {
             width: generic.width,
             codepageMapping: mappings[language],
-            cutter: true,
+            cutter: feeds[language] || feeds['esc-pos'],
         };
     }
 
     let encoder = new ReceiptPrinterEncoder({printerModel: id});
+    let cutter = encoder.printerCapabilities?.cutter;
 
     return {
         width: encoder.printableWidth,
         codepageMapping: encoder.printerCapabilities?.codepages || mappings[language],
-        cutter: !!encoder.printerCapabilities?.cutter,
+        cutter: cutter ? (cutter.feed || 0) : false,
     };
 }
 
-export { toStream, toModel, modelsFor, GENERICS, DEFAULT_MODEL };
+export { toStream, toModel, toDots, modelsFor, GENERICS, DEFAULT_MODEL };
