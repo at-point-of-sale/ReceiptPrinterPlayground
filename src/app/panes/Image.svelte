@@ -722,7 +722,7 @@
 
     const padding = (sheet, last) => sheet.torn ?
         `${BITE}px ${SIDE}px ${BITE}px` :
-        `${TEAR}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : TEAR}px`;
+        `${TEAR}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : 0}px`;
 
     /* A strip that was torn off ends where it was torn, so it never runs on */
 
