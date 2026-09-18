@@ -38,9 +38,13 @@ const spacings = {
     'star-graphics': 32,
 };
 
-/* And how far a printer that names no distance of its own feeds before it cuts,
-   which is what the generic widths are read with: four lines on an ESC/POS
-   printer and three on a Star one, the usual feed of either */
+/* And how far a printer that names no feed of its own feeds before it cuts,
+   which is four lines on an ESC/POS printer and three on a Star one, the usual
+   feed of either, and three lines and two of distance once the line that clears
+   the last one is taken off. It is what the generic widths are read with, and
+   what a printer with no cutter at all is read with, since the tear bar it has
+   instead sits about as far above the print head; a field for that distance in
+   the profile of a printer would say it per printer rather than per family */
 
 const feeds = {
     'esc-pos':       4,
@@ -48,6 +52,16 @@ const feeds = {
     'star-line':     3,
     'star-graphics': 3,
 };
+
+/**
+ * The feed a printer of a language has when it names none of its own, in lines:
+ * the feed of a generic printer, and the tear bar of a printer that has no
+ * cutter, which sits where a cutter would
+ *
+ * @param  {?string}   language   The language the stream is read in
+ * @return {number}               The distance in lines
+ */
+const familyFeed = (language) => feeds[language] || feeds['esc-pos'];
 
 /**
  * The cutter's distance in dots, which is what the renderer takes. A profile's
@@ -179,7 +193,7 @@ const toModel = (id, language) => {
         return {
             width: generic.width,
             codepageMapping: mappings[language],
-            cutter: feeds[language] || feeds['esc-pos'],
+            cutter: familyFeed(language),
         };
     }
 
@@ -193,4 +207,4 @@ const toModel = (id, language) => {
     };
 }
 
-export { toStream, toModel, toDots, modelsFor, GENERICS, DEFAULT_MODEL };
+export { toStream, toModel, toDots, familyFeed, modelsFor, GENERICS, DEFAULT_MODEL };

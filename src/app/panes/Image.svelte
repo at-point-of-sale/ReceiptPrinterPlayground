@@ -2,7 +2,7 @@
 
     import ReceiptPrinterRenderer, { rasterize, stitch, pieces, toImageData } from '@point-of-sale/receipt-printer-renderer';
 
-    import { toDots } from '../../utils/stream.js';
+    import { toDots, familyFeed } from '../../utils/stream.js';
 
     /*
         The paper, as the printer would print it.
@@ -271,9 +271,12 @@
                prints that far below the cut edge and the paper is cut that far
                above the row the command was given at: the blank the encoder fed
                in front of its cut is the top of the next piece. A printer with
-               no cutter, and one that feeds nothing, move nothing */
+               no cutter has a tear bar in the same place, so the same shift
+               applies to it, at the distance its family usually has; a printer
+               that feeds nothing moves nothing */
 
-            let distance = toDots(stream.cutter, language);
+            let cutter = stream.cutter !== false;
+            let distance = toDots(cutter ? stream.cutter : familyFeed(language), language);
 
             let renderer = new ReceiptPrinterRenderer(Object.assign({
                 language,
@@ -288,15 +291,28 @@
 
             let layout = renderer.layout(stream.bytes);
 
-            /* A printer with no cutter ignores every command that cuts, so what
-               it prints is one strip of paper, torn off by hand at either end */
-
-            let cutter = stream.cutter !== false;
-
             let cuts = layout.entries.filter((entry) => entry.type === 'cut');
 
-            let split = cutter ? pieces(layout) : [];
-            let list = split.length ? split : [ layout ];
+            /* A printer with no cutter ignored every command that cut, and what
+               takes the paper instead is the hand that tears it off the bar when
+               the job is done: the paper tears where the bar is, which is the
+               distance above the print head, and the rows between the two stay
+               in the printer. A job that never reached the bar is torn nowhere */
+
+            let tear = cutter ? 0 : layout.height - distance;
+
+            let edges = cutter ? cuts : (tear > 0 ?
+                [ { type: 'cut', y: tear, value: 'full', source: null } ] : []);
+
+            let source = cutter ? layout : Object.assign({}, layout, {
+                entries: [
+                    ...layout.entries.filter((entry) => entry.type !== 'cut'),
+                    ...edges,
+                ],
+            });
+
+            let split = edges.length ? pieces(source) : [];
+            let list = split.length ? split : [ source ];
 
             /* Where every piece begins and ends on the paper, worked out the way
                pieces() works it out: the rows the paper is cut on, inside it,
@@ -305,7 +321,7 @@
             let rows = layout.height;
             let clamp = (value) => Math.max(0, Math.min(rows, value));
 
-            let bounds = [0, ...new Set((cutter ? cuts : []).map((entry) =>
+            let bounds = [0, ...new Set(edges.map((entry) =>
                 clamp(entry.y)).sort((a, b) => a - b)), rows];
 
             let spans = [];
@@ -345,24 +361,25 @@
             let known = spans.length === list.length;
 
             let drawn = [];
-            let sheet = { panels: [], gaps: [], marks: [], cut: null, torn: !cutter };
+            let sheet = { panels: [], gaps: [], marks: [], cut: null, ended: false, torn: !cutter };
 
             for (let i = 0; i < list.length; i++) {
                 if (panels[i]) {
                     sheet.panels.push(panels[i]);
                 }
 
-                let here = known ? cuts.filter((entry) => clamp(entry.y) === spans[i].bottom) : [];
-                let ending = cutter ? here.find((entry) => entry.value === 'full') : null;
+                let here = known ? edges.filter((entry) => clamp(entry.y) === spans[i].bottom) : [];
+                let ending = here.find((entry) => entry.value === 'full');
 
                 if (ending) {
                     sheet.cut = ending.source;
+                    sheet.ended = true;
 
                     if (sheet.panels.length) {
                         drawn.push(sheet);
                     }
 
-                    sheet = { panels: [], gaps: [], marks: [], cut: null, torn: false };
+                    sheet = { panels: [], gaps: [], marks: [], cut: null, ended: false, torn: !cutter };
                     continue;
                 }
 
@@ -391,12 +408,37 @@
                 drawn.push(sheet);
             }
 
-            /* Without a cutter there is one strip and no edge to draw for a cut,
-               but a cut that is selected still shows the row it was made on, so
-               every cut of the stream is a mark on that one strip */
+            /* A cut a printer without a cutter ignored draws no edge, but it is
+               still a row of the paper, so it is a mark on the piece it fell on */
 
-            if (!cutter && drawn.length) {
-                drawn[0].marks = cuts.map((entry) => ({ panel: 0, row: clamp(entry.y), source: entry.source }));
+            if (!cutter && known) {
+                for (let entry of cuts) {
+                    let row = clamp(entry.y);
+                    let index = spans.findIndex((span) => row >= span.top && row < span.bottom);
+
+                    if (index < 0) {
+                        index = spans.length - 1;
+                    }
+
+                    /* Which sheet and which panel that piece ended up on: the
+                       pieces are handed out in order, one panel at a time */
+
+                    let count = 0;
+
+                    for (let one of drawn) {
+                        if (index < count + one.panels.length) {
+                            one.marks.push({
+                                panel: index - count,
+                                row: row - spans[index].top,
+                                source: entry.source,
+                            });
+
+                            break;
+                        }
+
+                        count += one.panels.length;
+                    }
+                }
             }
 
             sheets = drawn;
@@ -606,31 +648,28 @@
        every edge of it, the overlay of the selection included. */
 
     const shape = (sheet, index) => {
-        /* A strip that was torn off by hand, from a printer with no cutter, has
-           a row of teeth at either end and nothing else: no tear of a cut, and
-           no notch, since a cut this printer never made left no edge */
+        /* The top edge: the tear of the cut this sheet begins on, or the teeth
+           of the bar a printer without a cutter was torn off */
 
-        if (sheet.torn) {
-            return `polygon(${[
-                ...teeth(sheet, 1),
-                ...teeth(sheet, -1).reverse(),
-            ].join(', ')})`;
-        }
-
-        let points = [
+        let points = sheet.torn ? [ ...teeth(sheet, 1) ] : [
             `0 ${TEAR}px`,
             `calc(100% - ${TEAR_INSET}px) ${TEAR}px`,
             '100% 0',
         ];
 
-        if (sheet.cut) {
-            points.push(`100% calc(100% - ${TEAR}px)`, `calc(100% - ${TEAR_INSET}px) 100%`);
+        /* And the bottom edge, right to left: the teeth of the bar it was torn
+           off, the corner a cutter takes with it, or nothing at all on paper
+           that is still in the printer, which fades away instead */
+
+        if (sheet.ended && sheet.torn) {
+            points.push(...teeth(sheet, -1).reverse());
+        }
+        else if (sheet.ended) {
+            points.push(`100% calc(100% - ${TEAR}px)`, `calc(100% - ${TEAR_INSET}px) 100%`, '0 100%');
         }
         else {
-            points.push('100% 100%');
+            points.push('100% 100%', '0 100%');
         }
-
-        points.push('0 100%');
 
         /* And back up the left edge, through the wedge of every partial cut,
            the lowest one first. A wedge sits in the middle of the gap between
@@ -720,13 +759,23 @@
        never cut the paper it runs on for before it fades away. The blank a
        receipt has at a cut is the job's own, and comes with the dots */
 
-    const padding = (sheet, last) => sheet.torn ?
-        `${BITE}px ${SIDE}px ${BITE}px` :
-        `${TEAR}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : 0}px`;
+    const padding = (sheet, last) => {
+        /* The room the top edge needs, the teeth of a tear bar or the rise of a
+           cutter's tear, and under the last row either the room of the edge that
+           took the paper away or the paper that is still in the printer */
 
-    /* A strip that was torn off ends where it was torn, so it never runs on */
+        let top = sheet.torn ? BITE : TEAR;
+        let bottom = running(sheet, last) ? RUNS_ON : (sheet.torn ? BITE : 0);
 
-    const running = (sheet, last) => last && !sheet.cut && !sheet.torn;
+        return `${top}px ${SIDE}px ${bottom}px`;
+    }
+
+    /* Paper that nothing took away is paper that is still in the printer, which
+       runs on and fades rather than ending: the last piece of a stream with no
+       cut at its end, and the rows a printer without a cutter holds between its
+       tear bar and its head */
+
+    const running = (sheet, last) => last && !sheet.ended;
 
     /* A canvas is painted when it is put in the page, which is what an action is
        for. The list of pieces is keyed by the pieces themselves, so a canvas is
