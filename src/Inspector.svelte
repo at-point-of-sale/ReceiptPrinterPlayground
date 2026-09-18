@@ -9,6 +9,7 @@
     import { toModel, toDots, modelsFor, GENERICS, DEFAULT_MODEL } from './utils/stream.js';
     import { connect, disconnect } from './utils/printer.js';
     import { ranges, at } from './utils/tokens.js';
+    import { decodeFragment, fromBase64Url } from './utils/fragment.js';
 
     import Header from './app/Inspector/Header.svelte';
     import Toolbar from './app/Inspector/Toolbar.svelte';
@@ -592,13 +593,15 @@
     });
 
 
-    /* And the link: `#data=` and the bytes in base64url, read once when the
-       page opens and never written back */
+    /* And the link: `#data=` and the bytes in base64url, with `model=` beside
+       it where the page that made the link knew one, read once when the page
+       opens and never written back. The scheme is the playground's as well,
+       which is why the reading of it is shared */
 
     const fromFragment = () => {
-        let match = /(?:^|[#&])data=([^&]*)/.exec(window.location.hash || '');
+        let { data, model: wanted } = decodeFragment(window.location.hash);
 
-        if (!match || !match[1]) {
+        if (!data) {
             return;
         }
 
@@ -606,21 +609,28 @@
             /* Base64url is what a link carries, and plain base64 is accepted as
                well, padded or not */
 
-            let value = decodeURIComponent(match[1]).replace(/-/g, '+').replace(/_/g, '/');
-
-            value += '='.repeat((4 - value.length % 4) % 4);
-
-            let binary = atob(value);
-            let data = new Uint8Array(binary.length);
-
-            for (let i = 0; i < binary.length; i++) {
-                data[i] = binary.charCodeAt(i);
-            }
-
-            load(data, 'receipt');
+            load(fromBase64Url(data), 'receipt');
         }
         catch (e) {
             error = 'The link does not hold a stream';
+            return;
+        }
+
+        /* And the model the link names, which is taken only when it is one the
+           picker offers for the language the file turned out to be written in:
+           the paper of a printer that speaks another language says nothing */
+
+        if (!wanted) {
+            return;
+        }
+
+        let allowed = [
+            ...GENERICS.map((generic) => generic.id),
+            ...modelsFor(detected).map((printer) => printer.id),
+        ];
+
+        if (allowed.includes(wanted)) {
+            model = wanted;
         }
     }
 

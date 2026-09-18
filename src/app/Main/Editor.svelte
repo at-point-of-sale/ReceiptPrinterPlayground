@@ -134,19 +134,49 @@
     }
 
     /* The script of somewhere else, a link to a bug report among them, put in
-       the editor as if it were typed */
+       the editor as if it were typed: one edit, which one undo takes back, so
+       that a link that arrives on top of a script somebody was working on is
+       not the end of that script */
 
     export function set(value) {
         if (!editor) {
             return;
         }
 
-        editor.setValue(value ?? '');
+        let previous = editor.getValue();
+        let next = value ?? '';
+
+        /* What came before is a step of its own, and so is this: Ace merges
+           what is typed in one breath into a single undo, and a script that
+           arrives out of a link is not part of anything that was typed */
+
+        editor.session.markUndoGroup();
+        editor.session.mergeUndoDeltas = false;
+
+        editor.selection.selectAll();
+        editor.session.replace(editor.getSelectionRange(), next);
+
+        editor.session.markUndoGroup();
+
         editor.selection.clearSelection();
         editor.selection.moveCursorToPosition({ row: 0, column: 0 });
         editor.renderer.scrollToRow(0);
 
         update();
+
+        /* A script that was there and is not the same script is a script that
+           was just lost, as far as whoever typed it is concerned */
+
+        if (previous.trim() !== '' && previous !== next) {
+            warn('The script of the link replaced yours. Undo brings it back.');
+        }
+    }
+
+    /* And what the page has to say about a link, in the note the dropped images
+       use: the editor is where a script would have gone */
+
+    export function note(message) {
+        warn(message);
     }
 
     function update() {
