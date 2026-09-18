@@ -26,6 +26,13 @@
     let container = $state(null);
     let generation = 0;
 
+    /* What the printer of the stream refuses, by the offset of the command it
+       refused: a printer without a QR code, or without one of the symbologies a
+       stream asks for, skips that command and prints nothing of it, and the
+       block of such a command carries a tag that says so */
+
+    let refusals = new Map();
+
     /* The block that is selected, by the offset of the token it shows. Which
        token a byte belongs to is not asked here: the page reads the ranges of
        the stream for itself, out of the tokenizer, so that a panel that is
@@ -119,12 +126,12 @@
     /* One row of a block: what it is called, the bytes it was read from and
        what they mean */
 
-    const row = (mnemonic, bytes, meaning, header, extra = '') => {
+    const row = (mnemonic, bytes, meaning, header, extra = '', tag = '') => {
         let name = header ? ' header' : '';
 
         return `<span class="mnemonic${name}">${mnemonic}</span>`
             + `<span class="meaning${name}">${meaning}</span>`
-            + `<span class="bytes${name}${extra}">${bytes}</span>`;
+            + `<span class="bytes${name}${extra}">${bytes}${tag}</span>`;
     }
 
     /* A payload is the data behind the numbers of a command, which the decoder
@@ -199,11 +206,18 @@
 
         let head = list.length ? token.bytes.subarray(0, list[0].offset) : token.bytes;
 
+        /* A command the printer does not have is a command that draws nothing,
+           and the head of its block says which */
+
+        let refused = refusals.get(token.offset);
+
         let result = row(
             escape(token.family.mnemonic),
             hex(head),
             token.family.name === token.family.mnemonic ? '' : escape(token.family.name),
             true,
+            '',
+            refused ? `<span class="refused">No ${escape(refused)} on this printer</span>` : '',
         );
 
         for (let parameter of list) {
@@ -321,6 +335,49 @@
 
 
     /**
+     * The commands the printer of a stream does not perform, by the offset of
+     * the bytes each of them came from
+     *
+     * The list is the renderer's: given the capabilities of a model it lays the
+     * stream out and marks every command that model skips as an unsupported
+     * entry, with a word for what it was. It is worked out here rather than
+     * handed in, so that a page that shows this pane shows the tags without
+     * having to know anything about them.
+     *
+     * @param  {object}   stream   The stream
+     * @return {Map}               What was refused, by offset
+     */
+    const unsupported = (stream) => {
+        let found = new Map();
+
+        if (!stream.capabilities || !ReceiptPrinterRenderer.languages.includes(stream.language)) {
+            return found;
+        }
+
+        try {
+            let renderer = new ReceiptPrinterRenderer({
+                language: stream.language,
+                width: stream.width,
+                codepageMapping: stream.codepageMapping,
+                capabilities: stream.capabilities,
+            });
+
+            for (let entry of renderer.layout(stream.bytes).entries) {
+                if (entry.type === 'unsupported' && entry.source) {
+                    found.set(entry.source.offset, entry.what);
+                }
+            }
+        }
+        catch (e) {
+            /* A stream the renderer cannot lay out is a stream nothing is known
+               to be refused in, which is no reason to show no commands */
+        }
+
+        return found;
+    }
+
+
+    /**
      * Show a stream
      *
      * @param  {object}  stream  The bytes and the settings of the printer that
@@ -333,6 +390,7 @@
         settings = null;
         pending = [];
         selected = null;
+        refusals = new Map();
 
         if (!stream) {
             return;
@@ -357,6 +415,13 @@
                     codepageMapping,
                 };
             }
+
+            /* What this printer refuses, which is a question for the renderer:
+               it lays the stream out against the capabilities of the model and
+               says which commands it skipped. A stream of no model in
+               particular names no capabilities and nothing is refused */
+
+            refusals = unsupported(stream);
 
             /* Read the bytes back the way the printer they were sent to would
                read them */
@@ -740,6 +805,20 @@
 
     div :global(.token .header) {
         font-weight: 600;
+    }
+
+    /* A command this printer does not have, said at the far end of the head of
+       its block: the colour the panes give a command that was not understood,
+       since a command that is skipped is one the paper never saw either */
+
+    div :global(.token .refused) {
+        margin-left: auto;
+        padding-left: 12px;
+
+        font-family: system-ui;
+        font-weight: 400;
+        font-size: 0.7rem;
+        color: #D32F2F;
     }
 
 

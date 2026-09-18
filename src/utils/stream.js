@@ -4,7 +4,11 @@
     this is where an encoder becomes one.
 
     A stream carries `bytes`, the `language` it is read in, the `width` of the
-    paper in dots, the `codepageMapping` it was encoded with, and `cutter`, the
+    paper in dots, the `codepageMapping` it was encoded with, `capabilities`,
+    what the printer of the model can do, which is the `printerCapabilities` of
+    the encoder as it is and is left out for a printer that is no model in
+    particular, since a command nothing describes is a command nothing refuses,
+    and `cutter`, the
     distance between the cutter and the print head in lines, or `false` for a
     printer that has no cutter at all: such a printer ignores the commands that
     cut, so its paper is one strip that is torn off by hand, and a printer that
@@ -112,8 +116,14 @@ const toStream = (encoder) => {
         width: encoder.printableWidth,
         codepageMapping: encoder.printerCapabilities?.codepages || mappings[language],
         cutter: cutterOf(encoder),
+        capabilities: named(encoder) ? encoder.printerCapabilities : undefined,
     };
 }
+
+/* Whether an encoder was built for a model of the encoder's list, which its
+   capabilities say by naming a language: the generic ones name none */
+
+const named = (encoder) => !!encoder.printerCapabilities?.language;
 
 /**
  * The cutter of the printer of an encoder: how far it feeds before it cuts, in
@@ -192,8 +202,8 @@ const modelsFor = (language) => ReceiptPrinterEncoder.printerModels.filter((prin
 
 /**
  * The settings a model puts behind the bytes: the width of its paper, the
- * codepage mapping it was encoded with and the distance of its cutter. The
- * language is not among them, because
+ * codepage mapping it was encoded with, the distance of its cutter and what it
+ * can do. The language is not among them, because
  * the language of a stream is the one that was picked for it and a printer of
  * another language is read in that language all the same.
  *
@@ -205,6 +215,9 @@ const toModel = (id, language) => {
     let generic = GENERICS.find((printer) => printer.id === id);
 
     if (generic) {
+        /* A width and nothing else: a printer that is no model in particular
+           refuses nothing, which is the best case and carries no capabilities */
+
         return {
             width: generic.width,
             codepageMapping: mappings[language],
@@ -213,12 +226,14 @@ const toModel = (id, language) => {
     }
 
     let encoder = new ReceiptPrinterEncoder({printerModel: id});
-    let cutter = encoder.printerCapabilities?.cutter;
+    let capabilities = encoder.printerCapabilities;
+    let cutter = capabilities?.cutter;
 
     return {
         width: encoder.printableWidth,
-        codepageMapping: encoder.printerCapabilities?.codepages || mappings[language],
+        codepageMapping: capabilities?.codepages || mappings[language],
         cutter: cutter ? (cutter.feed || 0) : false,
+        capabilities,
     };
 }
 

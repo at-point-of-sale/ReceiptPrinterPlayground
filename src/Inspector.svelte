@@ -406,12 +406,17 @@
 
             let distance = toDots(stream.cutter, language);
 
+            /* The paper is saved as the Rendered panel shows it: the cutter's
+               distance and what the printer can do, both */
+
             let renderer = new ReceiptPrinterRenderer(Object.assign({
                 language,
                 width,
                 codepageMapping,
                 commands: [ 'cut', 'pulse', 'feed' ],
-            }, distance ? { cutterDistance: distance } : {}));
+            },
+            distance ? { cutterDistance: distance } : {},
+            stream.capabilities ? { capabilities: stream.capabilities } : {}));
 
             if (format === 'png') {
                 /* The paper of the whole roll, with a dashed line where it is

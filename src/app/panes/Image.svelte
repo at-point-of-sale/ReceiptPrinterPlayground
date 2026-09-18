@@ -278,12 +278,26 @@
             let cutter = stream.cutter !== false;
             let distance = cutter ? toDots(stream.cutter, language) : tearBar(language);
 
+            /* What the printer can do, which is the model's capabilities as the
+               encoder keeps them: a command it does not have draws nothing, the
+               way that printer skips it. A stream of no model in particular
+               carries none and everything is drawn.
+
+               A command that was refused leaves an unsupported entry in the
+               list, which this pane does nothing with: it drew nothing and took
+               up no paper, so a selection of it outlines nothing here. A marker
+               on the paper at the row where it would have printed is worth
+               having and is not in this version; the Decoded panel is where a
+               refused command is named. */
+
             let renderer = new ReceiptPrinterRenderer(Object.assign({
                 language,
                 width,
                 codepageMapping: stream.codepageMapping,
                 commands: [ 'cut', 'pulse', 'feed' ],
-            }, distance ? { cutterDistance: distance } : {}));
+            },
+            distance ? { cutterDistance: distance } : {},
+            stream.capabilities ? { capabilities: stream.capabilities } : {}));
 
             /* The list first, because it says what was drawn and where; the dots
                are that same list rasterized, so the two agree by construction.
