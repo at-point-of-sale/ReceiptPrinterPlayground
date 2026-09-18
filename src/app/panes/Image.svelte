@@ -639,7 +639,7 @@
 
     const gaps = (sheet) => {
         let found = [];
-        let top = TEAR;
+        let top = GAP;
 
         for (let i = 0; i < sheet.panels.length - 1; i++) {
             top += sheet.panels[i].image.height * factor(sheet);
@@ -689,15 +689,16 @@
 
     const round = (value) => Math.round(value * 100) / 100;
 
-    /* The white a sheet carries above and below its dots, which is the room its
-       edges need and nothing more: the tear of the cut it begins on, the tear of
-       the cut it ends on, the teeth of a strip that was torn off by hand, and
-       under the last sheet of a stream that was never cut the paper it runs on
-       for before it fades away */
+    /* The white a sheet carries above and below its dots: an edge that is a cut
+       carries the same room a partial cut leaves between two pieces, with the
+       rise of its tear inside that room, so that paper cut at either end and
+       paper gapped in the middle read alike. A strip torn off by hand carries
+       the room its teeth need, and the last sheet of a stream that was never cut
+       the paper it runs on for before it fades away */
 
     const padding = (sheet, last) => sheet.torn ?
         `${BITE}px ${SIDE}px ${BITE}px` :
-        `${TEAR}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : TEAR}px`;
+        `${GAP}px ${SIDE}px ${running(sheet, last) ? RUNS_ON : GAP}px`;
 
     /* A strip that was torn off ends where it was torn, so it never runs on */
 
